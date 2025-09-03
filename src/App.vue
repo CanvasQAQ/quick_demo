@@ -62,6 +62,9 @@
               </el-menu-item>
               <el-menu-item class="menuitem_icon" index="5">
                 <el-icon :size="24"><icon-dislike /></el-icon>
+                </el-menu-item>
+              <el-menu-item class="menuitem_icon" index="6">
+                <el-icon :size="24"><icon-like /></el-icon>
                 
               </el-menu-item>
             </el-menu>

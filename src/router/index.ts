@@ -5,6 +5,7 @@ import SwitchDemo from '../views/SwitchDemo.vue'
 import PiniaDemo from '../views/PiniaDemo.vue'
 import SettingDemo from '../views/SettingDemo.vue'
 import FlaskApiDemo from '../views/FlaskApiDemo.vue'
+import SSHConfigDemo from '../views/SSHConfigDemo.vue'
 
 const routes = [
   {
@@ -35,6 +36,11 @@ const routes = [
     path: '/5',
     name: 'FlaskApiDemo',
     component: FlaskApiDemo
+  },
+      {
+    path: '/6',
+    name: 'SSHConfigDemo',
+    component: SSHConfigDemo
   }
 ]
 

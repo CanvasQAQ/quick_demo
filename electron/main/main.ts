@@ -10,6 +10,14 @@ const Store = require('electron-store').default
 import { ApiConfig, DEFAULT_API_CONFIG } from '../../src/types/api'
 let mainWindow: BrowserWindow | null = null
 import { flaskApi } from './utils/flask_api';
+import { SSHTunnelManager } from './utils/ssh-tunnel-manager';
+import { SecurityManager } from './utils/security-manager';
+
+import { IPCHandlers } from './utils/ssh-ipc-handlers.ts';
+let sshManager: SSHTunnelManager | null = null;
+let securityManager: SecurityManager | null = null;
+let ipcHandlers: IPCHandlers | null = null;
+
 
 
 interface StoreSchema {
@@ -47,6 +55,18 @@ ipcMain.handle('save-api-config', (event, config: ApiConfig): void => {
   store.set('apiConfig', config)
 })
 
+
+function initializeManagers(): void {
+  sshManager = new SSHTunnelManager();
+  securityManager = new SecurityManager();
+  ipcHandlers = new IPCHandlers(sshManager, securityManager, mainWindow);
+}
+
+function registerIpcHandlers(): void {
+  if (ipcHandlers) {
+    ipcHandlers.registerAllHandlers();
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -104,6 +124,7 @@ ipcMain.handle('window-close', () => {
   mainWindow?.close()
 })
 
+
 // 应用事件处理
 app.whenReady().then(createWindow)
 
@@ -117,9 +138,12 @@ app.whenReady().then(() => {
   }).catch(error => {
     console.error('启动Flask服务器失败:', error);
   });
+  initializeManagers();
+  registerIpcHandlers();
 });
 
 app.on('window-all-closed', () => {
+  sshManager.cleanupConnections();
   if (process.platform !== 'darwin') {
     app.quit()
   }

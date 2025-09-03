@@ -44,7 +44,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 工具函数
   getCurrentPort: (): Promise<number | null> => 
     ipcRenderer.invoke('flask-get-port'),
+  // SSH隧道方法
+  establishSSHTunnel: (jumpHosts, targetConfig) => 
+    ipcRenderer.invoke('establish-ssh-tunnel', jumpHosts, targetConfig),
   
+  cleanupConnections: () => 
+    ipcRenderer.invoke('cleanup-connections'),
+  
+  getConnectionStatus: () => 
+    ipcRenderer.invoke('get-connection-status'),
+  
+  // 安全方法
+  encryptData: (data) => 
+    ipcRenderer.invoke('encrypt-data', data),
+  
+  decryptData: (encryptedData) => 
+    ipcRenderer.invoke('decrypt-data', encryptedData),
+  
+  saveConfig: (config) => 
+    ipcRenderer.invoke('save-config', config),
+  
+  loadConfig: () => 
+    ipcRenderer.invoke('load-config'),
+  
+  // 文件对话框
+  showOpenDialog: (options) => 
+    ipcRenderer.invoke('show-open-dialog', options),
   // 事件监听
   onServerStatusChange: (callback: (status: FlaskServerStatus) => void) => {
     ipcRenderer.on('flask-status-changed', (event, status: FlaskServerStatus) => {
@@ -83,7 +108,19 @@ declare global {
       
       // API 测试
       testApi: (url: string) => Promise<ApiTestResult>;
+       // SSH隧道相关
+      establishSSHTunnel: (jumpHosts: any[], targetConfig: any) => Promise<any>;
+      cleanupConnections: () => Promise<any>;
+      getConnectionStatus: () => Promise<any>;
       
+      // 安全相关
+      encryptData: (data: string) => Promise<any>;
+      decryptData: (encryptedData: any) => Promise<any>;
+      saveConfig: (config: any) => Promise<any>;
+      loadConfig: () => Promise<any>;
+      
+      // 文件对话框
+      showOpenDialog: (options: any) => Promise<any>;
       // 工具函数
       getCurrentPort: () => Promise<number | null>;
       
