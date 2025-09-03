@@ -1,0 +1,224 @@
+// styles/purple-theme.scss
+/* stylelint-disable */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* stylelint-enable */
+
+// 自定义白天模式 - 柔和低亮度紫色主题
+:root {
+  // 主色调 - 柔和紫色
+  --el-color-primary: #8a6de9;
+  --el-color-primary-light-3: #a18af0;
+  --el-color-primary-light-5: #b8a6f7;
+  --el-color-primary-light-7: #d0c3fd;
+  --el-color-primary-light-8: #ddd5f5;
+  --el-color-primary-light-9: #eae7fc;
+  --el-color-primary-dark-2: #7255d9;
+  
+  // 成功色 - 柔和绿色
+  --el-color-success: #67c23a;
+  --el-color-success-light-3: #85ce61;
+  --el-color-success-light-5: #a4da89;
+  --el-color-success-light-7: #c3e6b0;
+  --el-color-success-light-8: #d1edc4;
+  --el-color-success-light-9: #e1f3d8;
+  --el-color-success-dark-2: #5daf34;
+  
+  // 警告色 - 温和橙色
+  --el-color-warning: #e6a23c;
+  --el-color-warning-light-3: #ebb563;
+  --el-color-warning-light-5: #f0c78a;
+  --el-color-warning-light-7: #f5d9b1;
+  --el-color-warning-light-8: #f7e3c7;
+  --el-color-warning-light-9: #fdf6ec;
+  --el-color-warning-dark-2: #cf9236;
+  
+  // 危险色 - 柔和红色
+  --el-color-danger: #f56c6c;
+  --el-color-danger-light-3: #f78989;
+  --el-color-danger-light-5: #f9a6a6;
+  --el-color-danger-light-7: #fbc3c3;
+  --el-color-danger-light-8: #fcd2d2;
+  --el-color-danger-light-9: #fef0f0;
+  --el-color-danger-dark-2: #dd6161;
+  
+  // 信息色 - 柔和灰色
+  --el-color-info: #909399;
+  --el-color-info-light-3: #a6a9ad;
+  --el-color-info-light-5: #bcbec2;
+  --el-color-info-light-7: #d2d4d6;
+  --el-color-info-light-8: #dfe0e1;
+  --el-color-info-light-9: #f4f4f5;
+  --el-color-info-dark-2: #82848a;
+  
+  // 背景色 - 降低亮度，增加柔和感
+  --el-bg-color: #f8f9fa;
+  --el-bg-color-page: #f2f3f5;
+  --el-bg-color-overlay: #ffffff;
+  --el-bg-color-mask: rgba(0, 0, 0, 0.5);
+  
+  // 文字颜色 - 保持深色确保清晰度
+  --el-text-color-primary: #2c3e50;
+  --el-text-color-regular: #5a6c7d;
+  --el-text-color-secondary: #7f8c8d;
+  --el-text-color-placeholder: #b3b3b3;
+  --el-text-color-disabled: #cccccc;
+  --el-text-color-white: #ffffff;
+  
+  // 边框颜色 - 柔和灰色，降低亮度
+  --el-border-color: #dce1e6;
+  --el-border-color-light: #e4e7ed;
+  --el-border-color-lighter: #ecf0f1;
+  --el-border-color-extra-light: #f4f6f8;
+  --el-border-color-dark: #bdc3c7;
+  
+  // 阴影 - 柔和阴影
+  --el-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04),
+                   0px 8px 20px rgba(0, 0, 0, 0.08);
+  --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.06);
+  --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.04);
+  --el-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.08),
+                        0px 12px 32px rgba(0, 0, 0, 0.12);
+  
+  // 填充色 - 降低亮度
+  --el-fill-color: #f1f2f6;
+  --el-fill-color-light: #f8f9fa;
+  --el-fill-color-lighter: #fafbfc;
+  --el-fill-color-extra-light: #fcfdfd;
+  --el-fill-color-dark: #e9ecef;
+  --el-fill-color-darker: #dee2e6;
+  --el-fill-color-blank: #ffffff;
+  --el-self-hover: rgba(0, 0, 0, 0.1);
+}
+
+// 自定义暗黑模式 - 深紫色主题
+html.dark {
+  // 主色调 - 深紫色
+  --el-color-primary: #9d88f1;
+  --el-color-primary-light-3: #8a6de9;
+  --el-color-primary-light-5: #7752e1;
+  --el-color-primary-light-7: #5e3cc9;
+  --el-color-primary-light-8: #4a2fb0;
+  --el-color-primary-light-9: #362288;
+  --el-color-primary-dark-2: #b4a3f8;
+  
+  // 成功色
+  --el-color-success: #67c23a;
+  --el-color-success-light-3: #5daf34;
+  --el-color-success-light-5: #4e7d2e;
+  --el-color-success-light-7: #3d5c24;
+  --el-color-success-light-8: #2c3b1a;
+  --el-color-success-light-9: #1b1a10;
+  --el-color-success-dark-2: #85ce61;
+  
+  // 警告色
+  --el-color-warning: #e6a23c;
+  --el-color-warning-light-3: #cf9236;
+  --el-color-warning-light-5: #b87d2d;
+  --el-color-warning-light-7: #a16824;
+  --el-color-warning-light-8: #8a531b;
+  --el-color-warning-light-9: #733e12;
+  --el-color-warning-dark-2: #ebb563;
+  
+  // 危险色
+  --el-color-danger: #f56c6c;
+  --el-color-danger-light-3: #dd6161;
+  --el-color-danger-light-5: #c55656;
+  --el-color-danger-light-7: #ad4b4b;
+  --el-color-danger-light-8: #954040;
+  --el-color-danger-light-9: #7d3535;
+  --el-color-danger-dark-2: #f78989;
+  
+  // 信息色
+  --el-color-info: #909399;
+  --el-color-info-light-3: #82848a;
+  --el-color-info-light-5: #73767a;
+  --el-color-info-light-7: #64676b;
+  --el-color-info-light-8: #55585c;
+  --el-color-info-light-9: #46494d;
+  --el-color-info-dark-2: #a6a9ad;
+  
+  // 背景色 - 深色系
+  --el-bg-color: #1a1a1a;
+  --el-bg-color-page: #121212;
+  --el-bg-color-overlay: #252525;
+  --el-bg-color-mask: rgba(0, 0, 0, 0.8);
+  
+  // 文字颜色 - 清晰易读
+  --el-text-color-primary: #f0f0f0;
+  --el-text-color-regular: #d9d9d9;
+  --el-text-color-secondary: #b3b3b3;
+  --el-text-color-placeholder: #8c8c8c;
+  --el-text-color-disabled: #666666;
+  --el-text-color-white: #ffffff;
+  
+  // 边框颜色 - 深色系
+  --el-border-color: #404040;
+  --el-border-color-light: #333333;
+  --el-border-color-lighter: #2a2a2a;
+  --el-border-color-extra-light: #222222;
+  --el-border-color-dark: #4d4d4d;
+  
+  // 阴影 - 暗黑模式阴影
+  --el-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36), 
+                   0px 8px 20px rgba(0, 0, 0, 0.72);
+  --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.72);
+  --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.6);
+  --el-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.72), 
+                        0px 12px 32px rgba(0, 0, 0, 0.8);
+  
+  // 填充色
+  --el-fill-color: #262626;
+  --el-fill-color-light: #303030;
+  --el-fill-color-lighter: #333333;
+  --el-fill-color-extra-light: #1f1f1f;
+  --el-fill-color-dark: #404040;
+  --el-fill-color-darker: #4d4d4d;
+  --el-fill-color-blank: #1a1a1a;
+  --el-self-hover: rgba(255, 255, 255, 0.1);
+}
+
+// 护眼模式 - 浅绿色主题
+.eye-protection-mode {
+  // 主色调 - 柔和绿色
+  --el-color-primary: #4CAF50;
+  --el-color-primary-light-3: #66BB6A;
+  --el-color-primary-light-5: #81C784;
+  --el-color-primary-light-7: #A5D6A7;
+  --el-color-primary-light-8: #C8E6C9;
+  --el-color-primary-light-9: #E8F5E8;
+  --el-color-primary-dark-2: #388E3C;
+  
+  // 背景色 - 护眼浅绿色
+  --el-bg-color: #F1F8E9;
+  --el-bg-color-page: #E8F5E8;
+  --el-bg-color-overlay: #FFFFFF;
+  
+  // 文字颜色 - 深绿色系
+  --el-text-color-primary: #2E7D32;
+  --el-text-color-regular: #4CAF50;
+  --el-text-color-secondary: #81C784;
+  
+  // 边框颜色 - 柔和绿色
+  --el-border-color: #C8E6C9;
+  --el-border-color-light: #E8F5E8;
+  
+  // 填充色
+  --el-fill-color: #E8F5E8;
+  --el-fill-color-light: #F1F8E9;
+}
+
+// 添加过渡效果
+:root, html.dark, .eye-protection-mode {
+  transition: all 0.3s ease-in-out;
+}
+
+// 确保body背景色跟随主题
+body {
+  background-color: var(--el-bg-color-page);
+  color: var(--el-text-color-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}

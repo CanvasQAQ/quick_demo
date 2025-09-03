@@ -10,7 +10,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 // if you just want to import css
 import 'element-plus/theme-chalk/dark/css-vars.css'
-import './styles/element-theme.scss'
+import './styles/element-theme2.scss'
 
 import {install} from '@icon-park/vue-next/es/all';
 import '@icon-park/vue-next/styles/index.css';
