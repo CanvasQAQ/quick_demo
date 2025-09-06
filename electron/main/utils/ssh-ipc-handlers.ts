@@ -125,13 +125,23 @@ export class IPCHandlers {
         if (!this.mainWindow) {
           throw new Error('主窗口未初始化');
         }
-        const result = await dialog.showOpenDialog(this.mainWindow, options);
+        
+        // 处理 options 为 undefined 的情况
+        const dialogOptions: Electron.OpenDialogOptions = {
+          title: '选择文件',
+          defaultPath: require('os').homedir() + (process.platform === 'win32' ? '\\.ssh' : '/.ssh'),
+          properties: ['openFile'],
+          ...options // 如果 options 存在，会覆盖上面的默认值
+        };
+        // console.log(dialogOptions)
+        const result = await dialog.showOpenDialog(this.mainWindow, dialogOptions);
         return this.createSuccessResponse(result);
       } catch (error) {
         return this.createErrorResponse(error, '打开对话框失败');
       }
     });
   }
+
 
   // 创建成功响应（确保可序列化）
   private createSuccessResponse(data: any): any {

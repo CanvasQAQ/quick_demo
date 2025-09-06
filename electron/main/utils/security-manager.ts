@@ -196,15 +196,46 @@ export class SecurityManager {
   }
 
   // 验证配置格式
+// 验证配置格式
+// 更严格的验证
   private validateConfig(config: any): config is AppConfig {
-    return (
-      config &&
-      typeof config === 'object' &&
-      Array.isArray(config.jumpHosts) &&
-      config.targetConfig &&
-      typeof config.targetConfig === 'object'
-    );
+    if (!config || typeof config !== 'object') {
+      return false;
+    }
+
+    // 验证 jumpHosts 数组
+    if (!Array.isArray(config.jumpHosts)) {
+      return false;
+    }
+
+    // 验证每个跳板机对象
+    for (const host of config.jumpHosts) {
+      if (!host || typeof host !== 'object') {
+        return false;
+      }
+      if (typeof host.hostname !== 'string' || 
+          typeof host.port !== 'number' ||
+          typeof host.username !== 'string') {
+        return false;
+      }
+    }
+
+    // 验证主配置
+    if (!config.config || typeof config.config !== 'object') {
+      return false;
+    }
+
+    const targetConfig = config.config;
+    if (typeof targetConfig.targetHost !== 'string' ||
+        typeof targetConfig.targetPort !== 'number' ||
+        typeof targetConfig.localPort !== 'number') {
+      return false;
+    }
+
+    return true;
   }
+
+
 
   // 清除所有存储的配置和密钥
   async clearAllData(): Promise<{ success: boolean; message: string }> {

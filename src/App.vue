@@ -53,19 +53,24 @@
               </el-menu-item>
               <el-menu-item class="menuitem_icon" index="2">
                 <el-icon :size="24"><icon-system /></el-icon>
+                <template #title>Base Component</template>
               </el-menu-item>
+              
               <el-menu-item class="menuitem_icon" index="3">
                 <el-icon :size="24"><icon-pineapple /></el-icon>
+                <template #title>Pinia</template>
               </el-menu-item>
               <el-menu-item class="menuitem_icon" index="4">
                 <el-icon :size="24"><icon-setting /></el-icon>
+                <template #title>Setting</template>
               </el-menu-item>
               <el-menu-item class="menuitem_icon" index="5">
                 <el-icon :size="24"><icon-dislike /></el-icon>
+                <template #title>Fast API</template>
                 </el-menu-item>
               <el-menu-item class="menuitem_icon" index="6">
                 <el-icon :size="24"><icon-like /></el-icon>
-                
+                <template #title>SSH Tunnel</template>
               </el-menu-item>
             </el-menu>
         </el-aside>
