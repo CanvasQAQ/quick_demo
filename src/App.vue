@@ -72,6 +72,10 @@
                 <el-icon :size="24"><icon-like /></el-icon>
                 <template #title>SSH Tunnel</template>
               </el-menu-item>
+              <!-- <el-menu-item class="menuitem_icon" index="7">
+                <el-icon :size="24"><icon-api /></el-icon>
+                <template #title>API Test</template>
+              </el-menu-item> -->
             </el-menu>
         </el-aside>
         <el-aside 

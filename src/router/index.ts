@@ -6,6 +6,7 @@ import PiniaDemo from '../views/PiniaDemo.vue'
 import SettingDemo from '../views/SettingDemo.vue'
 import FlaskApiDemo from '../views/FlaskApiDemo.vue'
 import SSHConfigDemo from '../views/SSHConfigDemo.vue'
+import ApiTestDemo from '../views/ApiTestDemo.vue'
 
 const routes = [
   {
@@ -41,7 +42,12 @@ const routes = [
     path: '/6',
     name: 'SSHConfigDemo',
     component: SSHConfigDemo
-  }
+  },
+  //     {
+  //   path: '/7',
+  //   name: 'APITestDemo',
+  //   component: ApiTestDemo
+  // }
 ]
 
 const router = createRouter({

@@ -25,6 +25,8 @@ export interface ConnectionStatus {
   localPort?: number;
   target?: string;
   connectionTime?: string;
+  jumpHosts?: SSHConnectionConfig[]; // 新增字段
+
 }
 
 export class SSHTunnelManager {
@@ -75,8 +77,10 @@ export class SSHTunnelManager {
         activeConnections: this.connections.size,
         localPort: targetConfig.localPort,
         target: `${targetConfig.targetHost}:${targetConfig.targetPort}`,
-        connectionTime: new Date().toISOString()
+        connectionTime: new Date().toISOString(),
+        jumpHosts: [...jumpHosts] // 新增这行
       };
+
 
       console.log(`SSH隧道建立成功，本地端口: ${targetConfig.localPort}`);
       

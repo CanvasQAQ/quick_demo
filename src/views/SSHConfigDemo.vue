@@ -41,37 +41,77 @@
         </div>
       </template>
 
-      <!-- 目标服务器配置 -->
-      <el-form :model="configForm" label-width="120px" :rules="formRules" ref="configFormRef">
-        <el-divider>目标服务器配置</el-divider>
-        
-        <el-form-item label="目标主机" prop="targetHost">
-          <el-input
-            v-model="configForm.targetHost"
-            placeholder="localhost"
-            clearable
-          />
-        </el-form-item>
+<!-- 端口映射配置 -->
+<el-form 
+  :model="configForm" 
+  :rules="formRules" 
+  ref="configFormRef"
+  label-width="100px"
+  class="efficient-form"
+>
+  <el-divider>端口映射配置</el-divider>
+  
+  <div class="form-grid">
+    <!-- 远端配置 -->
+    <el-card class="config-section">
+          <template #header>
+              <span><icon-server size="16px" class="m-0 pr-2"/>远端服务器</span>
+          </template>
+      
+      <el-form-item label="目标主机" prop="targetHost">
+        <el-input
+          v-model="configForm.targetHost"
+          placeholder="例如：192.168.1.100 或 example.com"
+          clearable
+          style="width: 280px;"
+        />
+      </el-form-item>
 
-        <el-form-item label="目标端口" prop="targetPort">
-          <el-input-number
-            v-model="configForm.targetPort"
-            :min="1"
-            :max="65535"
-            controls-position="right"
-          />
-        </el-form-item>
+      <el-form-item label="目标端口" prop="targetPort">
+        <el-input-number
+          v-model="configForm.targetPort"
+          :min="1"
+          :max="65535"
+          controls-position="right"
+          style="width: 140px;"
+        />
+        <span class="field-hint">(1-65535)</span>
+      </el-form-item>
+    </el-card>
 
+    <!-- 本地配置 -->
+    <el-card class="config-section">
+          <template #header>
+            <div class="card-header2">
+              <span><icon-laptop size="16px" class="m-0 pr-2"/>本地映射</span>
+            </div>
+          </template>
+      
+      <div class="local-port-with-test">
         <el-form-item label="本地端口" prop="localPort">
           <el-input-number
             v-model="configForm.localPort"
             :min="1024"
             :max="65535"
             controls-position="right"
+            style="width: 140px;"
           />
-          <span class="port-hint">(1024-65535)</span>
+          <!-- <span class="field-hint">(1024-65535)</span> -->
         </el-form-item>
-      </el-form>
+        
+
+          <ApiTester 
+            class="ml-4"
+            :show-input="false"
+            :base-url="baseUrl"
+            :preset-buttons="presetButtons"
+          />
+
+      </div>
+    </el-card>
+  </div>
+</el-form>
+
 
       <!-- 跳板机配置 -->
       <el-divider>跳板机配置</el-divider>
@@ -137,7 +177,7 @@
                         {{ localAccessUrl }}
                     </a>
                     <el-button 
-                        size="mini" 
+                        size="small" 
                         @click="copyToClipboard(localAccessUrl)"
                         class="copy-btn"
                     >
@@ -277,7 +317,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, DocumentCopy } from '@element-plus/icons-vue'
-
+import ApiTester from '@/components/ApiTester.vue'
 // 响应式数据
 const configFormRef = ref()
 const jumpHostFormRef = ref()
@@ -295,7 +335,11 @@ const configForm = reactive({
   targetPort: 5000,
   localPort: 8080
 })
+const baseUrl = ref('')
 
+const presetButtons = ref([
+  { label: '测试本地端口', endpoint: 'http://127.0.0.1:'+ configForm.localPort},
+])
 // 跳板机列表
 const jumpHosts = reactive([])
 
@@ -697,21 +741,79 @@ const clearLogs = () => {
   addLog('info', '已清空日志')
 }
 
+// 从连接状态还原配置的函数
+const restoreFromConnectionStatus = (statusData) => {
+  if (statusData.jumpHosts && Array.isArray(statusData.jumpHosts)) {
+    // 清空现有跳板机数组
+    jumpHosts.splice(0, jumpHosts.length);
+    
+    // 添加从连接状态中获取的跳板机配置
+    statusData.jumpHosts.forEach((hostConfig) => {
+      jumpHosts.push({
+        hostname: hostConfig.hostname || '',
+        port: hostConfig.port || 22,
+        username: hostConfig.username || '',
+        authMethod: hostConfig.authMethod || 'password',
+        password: hostConfig.password || '',
+        privateKeyPath: hostConfig.privateKeyPath || '',
+        passphrase: hostConfig.passphrase || '',
+        id: Date.now() + Math.random() // 生成唯一ID
+      });
+    });
+    
+    addLog('info', `从连接状态还原了 ${statusData.jumpHosts.length} 个跳板机配置`);
+  }
+  
+  // 还原目标配置（如果有）
+  if (statusData.target) {
+    const [targetHost, targetPort] = statusData.target.split(':');
+    configForm.targetHost = targetHost || '';
+    configForm.targetPort = targetPort || '';
+  }
+  
+  if (statusData.localPort) {
+    configForm.localPort = statusData.localPort;
+  }
+};
+
 // 生命周期钩子
-onMounted(() => {
+onMounted(async () => {
   addLog('info', 'SSH隧道管理器已初始化')
   // 默认添加一个跳板机 - 使用新的方式
-  jumpHosts.push({
-    hostname: '',
-    port: 22,
-    username: '',
-    authMethod: 'password',
-    password: '',
-    privateKeyPath: '',
-    passphrase: ''
-  })
-  addLog('info', '已添加默认跳板机配置')
+  // jumpHosts.push({
+  //   hostname: '',
+  //   port: 22,
+  //   username: '',
+  //   authMethod: 'password',
+  //   password: '',
+  //   privateKeyPath: '',
+  //   passphrase: ''
+  // })
+  // addLog('info', '已添加默认跳板机配置')
+  try {
+    const statusResult = await window.electronAPI.getConnectionStatus();
+    if (statusResult.success) {
+      addLog('info', '尝试获取SSH状态');
+      // addLog('info', statusResult);
+      isConnected.value = statusResult.data.isConnected;
+      if (statusResult.data.isConnected) {
+        connectionTime.value = statusResult.connectionTime || new Date().toLocaleString();
+        
+        addLog('info', '检测到现有SSH连接，状态已同步');
+        restoreFromConnectionStatus(statusResult.data);
+        
+      } else {
+         addLog('info', '未连接');
+         handleLoadConfig()
+      }
+    }
+  } catch (error) {
+    console.error('获取连接状态失败:', error);
+    handleLoadConfig()
+  }
+  
 })
+
 
 onUnmounted(() => {
   if (isConnected.value) {
@@ -754,6 +856,17 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: medium;
+  font-style: bold;
+}
+
+.config-section :deep(.el-card__header) {
+  margin: 0px;
+  padding: 0px;
+  padding-bottom:  8px;
+  font-weight: 600;
+  font-size: 14px;
+
 }
 
 .jump-hosts-section {
@@ -912,4 +1025,71 @@ onUnmounted(() => {
     margin-top: 4px;
   }
 }
+.efficient-form {
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  
+  .config-section {
+    padding: 16px;
+    border-radius: 8px;
+    height: fit-content;
+  }
+  
+  .section-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e1e4e8;
+    
+    .section-icon {
+      margin-right: 8px;
+      font-size: 16px;
+    }
+    
+    .section-title {
+      font-weight: 600;
+      font-size: 14px;
+    }
+  }
+  
+  .local-port-with-test {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    
+    .el-form-item {
+      margin-bottom: 0;
+      flex-shrink: 0;
+    }
+    
+    .test-wrapper {
+      padding-top: 32px; /* 与表单项对齐 */
+    }
+  }
+  
+  .field-hint {
+    margin-left: 8px;
+    color: #6a737d;
+    font-size: 12px;
+  }
+  
+  .el-form-item {
+    margin-bottom: 16px;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  .el-divider__text {
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
 </style>
