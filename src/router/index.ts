@@ -6,7 +6,8 @@ import PiniaDemo from '../views/PiniaDemo.vue'
 import SettingDemo from '../views/SettingDemo.vue'
 import FlaskApiDemo from '../views/FlaskApiDemo.vue'
 import SSHConfigDemo from '../views/SSHConfigDemo.vue'
-import ApiTestDemo from '../views/ApiTestDemo.vue'
+// import ApiTestDemo from '../views/ApiTestDemo.vue'
+import TerminalManager from '../views/TerminalManager.vue'; // 新增
 
 const routes = [
   {
@@ -48,6 +49,11 @@ const routes = [
   //   name: 'APITestDemo',
   //   component: ApiTestDemo
   // }
+        {
+    path: '/8',
+    name: 'TerminalManager',
+    component: TerminalManager
+  },
 ]
 
 const router = createRouter({

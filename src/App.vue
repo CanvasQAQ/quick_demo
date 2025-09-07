@@ -76,6 +76,10 @@
                 <el-icon :size="24"><icon-api /></el-icon>
                 <template #title>API Test</template>
               </el-menu-item> -->
+                  <el-menu-item class="menuitem_icon" index="8">
+                <el-icon :size="24"><icon-terminal /></el-icon>
+                <template #title>Terminal</template>
+              </el-menu-item>
             </el-menu>
         </el-aside>
         <el-aside 
