@@ -4,7 +4,8 @@
   "description": "Electron + Vue 3 + TypeScript + Vite + Element Plus",
   "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "chcp 65001 && electron-vite dev",
+    "dev": "electron-vite dev",
+    "devwin": "chcp 65001 && electron-vite dev",
     "build": "electron-vite build",
     "dist": "electron-vite build && electron-builder"
   },
