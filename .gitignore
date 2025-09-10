@@ -131,3 +131,4 @@ dist-electron/
 .Trashes
 ehthumbs.db
 Thumbs.db
+backend/__pycache__/socketio_handler.cpython-312.pyc

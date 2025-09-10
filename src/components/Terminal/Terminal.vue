@@ -1,208 +1,239 @@
 <template>
-  <div class="terminal-container">
+  <el-container class="terminal-container">
     <!-- 顶部连接控制栏 -->
-    <div class="connection-header">
-      <div class="connection-controls">
-        <el-input 
-          v-model="host" 
-          placeholder="Host" 
-          size="small"
-          style="width: 180px"
-          :disabled="isConnected"
-        >
-          <template #prefix>
-            <el-icon><Connection /></el-icon>
-          </template>
-        </el-input>
-        
-        <el-input 
-          v-model="port" 
-          placeholder="Port" 
-          size="small"
-          type="number"
-          style="width: 100px"
-          :disabled="isConnected"
-        />
-        
-        <el-button 
-          :type="isConnected ? 'danger' : 'primary'" 
-          :icon="isConnected ? 'Switch' : 'Connection'"
-          size="small"
-          @click="toggleConnection"
-          :loading="isConnecting"
-        >
-          {{ isConnected ? '断开' : '连接' }}
-        </el-button>
-        
-        <el-button 
-          v-if="isConnected"
-          icon="Refresh"
-          size="small"
-          @click="clearOutput"
-        >
-          清屏
-        </el-button>
-      </div>
-      
-      <div class="status-indicator">
-        <span class="status-dot" :class="statusClass"></span>
-        <span class="status-text">
-          {{ statusText }}
-          <span v-if="sessionId" class="session-id">({{ sessionId }})</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- 终端内容区域 -->
-    <div v-if="isConnected" class="terminal-content">
-      <!-- 终端输出区域 -->
-      <div ref="outputContainer" class="output-panel">
-        <div 
-          v-for="(output, index) in outputHistory" 
-          :key="index" 
-          class="output-line"
-          :class="{ 'command-line': output.type === 'command' }"
-        >
-          <span v-if="output.type === 'command'" class="prompt">$ </span>
-          <span class="output-content">{{ output.output }}</span>
-          <span v-if="output.type === 'command'" class="cursor">▋</span>
-        </div>
-        
-        <!-- 当前命令输入行 -->
-        <div v-if="isConnected" class="input-line">
-          <span class="prompt">$ </span>
-          <span class="command-input">{{ currentInput }}</span>
-          <span class="cursor blink">▋</span>
-        </div>
-        
-        <!-- 执行状态指示 -->
-        <div v-if="isExecuting" class="execution-status">
-          <el-icon class="loading-icon"><Loading /></el-icon>
-          <span>执行中...</span>
-        </div>
-      </div>
-      
-      <!-- 命令输入区域 -->
-      <div class="input-container">
-        <el-input 
-          v-model="command" 
-          placeholder="输入命令并回车执行..." 
-          @keyup.enter="executeCommand"
-          :disabled="!isConnected || isExecuting"
-          clearable
-        >
-          <template #prepend>
-            <span class="input-prompt">$</span>
-          </template>
-          <template #append>
-            <el-button 
-              @click="executeCommand" 
-              :disabled="!isConnected || !command.trim() || isExecuting"
-              :loading="isExecuting"
+    <el-header class="terminal-header" height="auto">
+      <el-row justify="space-between" align="middle">
+        <el-col :span="16">
+          <el-space>
+            <el-input 
+              v-model="host" 
+              placeholder="Host" 
+              size="small"
+              style="width: 180px"
+              :disabled="isConnected"
             >
-              执行
+              <template #prefix>
+                <el-icon><Connection /></el-icon>
+              </template>
+            </el-input>
+            
+            <el-input 
+              v-model="port" 
+              placeholder="Port" 
+              size="small"
+              type="number"
+              style="width: 100px"
+              :disabled="isConnected"
+            />
+            
+            <el-button 
+              :type="isConnected ? 'danger' : 'primary'" 
+              :icon="isConnected ? 'Switch' : 'Connection'"
+              size="small"
+              @click="toggleConnection"
+              :loading="isConnecting"
+            >
+              {{ isConnected ? '断开' : '连接' }}
             </el-button>
-          </template>
-        </el-input>
+            
+            <el-button 
+              v-if="isConnected"
+              icon="Refresh"
+              size="small"
+              @click="clearAllTasks"
+              :disabled="tasks.length === 0"
+            >
+              清空任务
+            </el-button>
+          </el-space>
+        </el-col>
         
-        <div class="quick-commands">
-          <el-button 
-            v-for="cmd in quickCommands" 
-            :key="cmd"
-            size="small"
-            @click="executeQuickCommand(cmd)"
-            :disabled="!isConnected || isExecuting"
-          >
-            {{ cmd }}
-          </el-button>
-        </div>
-      </div>
-    </div>
+        <el-col :span="8" class="text-right">
+          <el-space>
+            <!-- 连接状态指示器 -->
+            <el-tag 
+              :type="getConnectionTagType()" 
+              size="small"
+              :effect="isConnected ? 'light' : 'plain'"
+            >
+              <el-icon v-if="isConnecting">
+                <Loading class="rotating" />
+              </el-icon>
+              <el-icon v-else-if="isConnected">
+                <SuccessFilled />
+              </el-icon>
+              <el-icon v-else-if="connectionError">
+                <CircleCloseFilled />
+              </el-icon>
+              <el-icon v-else>
+                <Clock />
+              </el-icon>
+              {{ getConnectionStatus() }}
+              <span v-if="sessionId" class="session-id">({{ sessionId.slice(0, 8) }})</span>
+            </el-tag>
 
-    <!-- 连接提示和错误信息 -->
-    <div v-if="!isConnected" class="connection-prompt">
-      <el-empty description="未连接到终端" :image-size="100">
-        <p>请输入主机地址和端口号后点击连接</p>
+            <!-- 移动端任务列表切换按钮 -->
+            <el-button 
+              v-if="isMobile" 
+              size="small" 
+              @click="toggleMobileDrawer"
+              :disabled="!isConnected"
+            >
+              <el-icon><List /></el-icon>
+              任务
+            </el-button>
+          </el-space>
+        </el-col>
+      </el-row>
+    </el-header>
+
+    <!-- 主体内容区域 -->
+    <el-container class="main-container" v-if="isConnected">
+      <!-- 左侧任务列表 -->
+      <el-aside 
+        v-if="!isMobile" 
+        width="320px" 
+        class="task-aside"
+      >
+        <TaskSidebar
+          :tasks="tasks"
+          :active-task-id="currentTaskId"
+          @select-task="handleTaskSelect"
+          @delete-task="handleDeleteTask"
+          @clear-all-tasks="clearAllTasks"
+          @refresh-tasks="refreshTasks"
+        />
+      </el-aside>
+      
+      <!-- 移动端抽屉式任务列表 -->
+      <el-drawer
+        v-if="isMobile"
+        v-model="mobileDrawerVisible"
+        title="任务列表"
+        direction="ltr"
+        size="80%"
+        class="mobile-task-drawer"
+      >
+        <TaskSidebar
+          :tasks="tasks"
+          :active-task-id="currentTaskId"
+          @select-task="handleMobileTaskSelect"
+          @delete-task="handleDeleteTask"
+          @clear-all-tasks="clearAllTasks"
+          @refresh-tasks="refreshTasks"
+        />
+      </el-drawer>
+
+      <!-- 右侧输出展示区域 -->
+      <el-main class="output-main">
+        <TaskOutput
+          :current-task="currentTask"
+          @reexecute-task="handleReexecuteTask"
+        />
+      </el-main>
+    </el-container>
+
+    <!-- 未连接状态提示 -->
+    <el-main v-else class="connection-prompt">
+      <el-empty description="未连接到终端服务" :image-size="120">
+        <template #image>
+          <el-icon size="80" color="var(--el-color-info)">
+            <Connection />
+          </el-icon>
+        </template>
+        <template #description>
+          <el-space direction="vertical" alignment="center">
+            <el-text>请输入主机地址和端口号后点击连接</el-text>
+            <el-text type="info" size="small">
+              默认连接本地服务：localhost:5000
+            </el-text>
+          </el-space>
+        </template>
       </el-empty>
-    </div>
-    
-    <div v-if="connectionError" class="error-message">
-      <el-alert 
-        :title="connectionError" 
-        type="error" 
-        :closable="true"
-        @close="clearError"
+    </el-main>
+
+    <!-- 底部命令输入栏 -->
+    <el-footer v-if="isConnected" height="auto" class="command-footer">
+      <CommandInput
+        :is-connected="isConnected"
+        :is-executing="isExecuting"
+        :command-history="commandHistory"
+        :favorite-commands="favoriteCommands"
+        @execute-command="handleExecuteCommand"
+        @add-to-favorites="handleAddToFavorites"
       />
-    </div>
-  </div>
+    </el-footer>
+
+    <!-- 错误提示 -->
+    <el-alert
+      v-if="connectionError"
+      :title="connectionError"
+      type="error"
+      :closable="true"
+      @close="clearError"
+      class="error-alert"
+    />
+  </el-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
-import { useTerminalStore } from '@/stores/terminalStore';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Connection, Switch, Refresh, Loading } from '@element-plus/icons-vue';
+import { useTerminalStore } from '@/stores/terminalStore';
+import { FavoriteCommand } from '@/types/terminal';
+import TaskSidebar from './TaskSidebar.vue';
+import TaskOutput from './TaskOutput.vue';
+import CommandInput from './CommandInput.vue';
+import {
+  Connection,
+  Switch,
+  Refresh,
+  Loading,
+  SuccessFilled,
+  CircleCloseFilled,
+  Clock,
+  List
+} from '@element-plus/icons-vue';
 
 const store = useTerminalStore();
+
+// 响应式数据
 const host = ref('localhost');
 const port = ref(5000);
-const command = ref('');
-const outputContainer = ref<HTMLElement | null>(null);
-const currentInput = ref('');
 const isConnecting = ref(false);
+const currentTaskId = ref<string>('');
+const mobileDrawerVisible = ref(false);
 
-// 常用命令快捷按钮
-const quickCommands = ['ls', 'pwd', 'cd', 'clear', 'ps', 'top'];
+// 移动端检测
+const isMobile = ref(false);
 
+// 计算属性
 const isConnected = computed(() => store.isConnected);
-const isExecuting = computed(() => store.isLoading);
-const status = computed(() => store.status);
-const outputHistory = computed(() => store.outputHistory);
+const isExecuting = computed(() => store.isExecuting);
 const connectionError = computed(() => store.connectionError);
 const sessionId = computed(() => store.sessionId);
+const tasks = computed(() => store.tasks);
+const commandHistory = computed(() => store.commandHistory);
+const favoriteCommands = computed(() => store.favoriteCommands);
 
-// 状态显示文本
-const statusText = computed(() => {
-  if (!isConnected.value) return '未连接';
-  if (isExecuting.value) return '执行中...';
-  return status.value?.status === 'executing' ? '执行中' : '已连接';
+const currentTask = computed(() => {
+  if (!currentTaskId.value) return undefined;
+  return tasks.value.find(task => task.id === currentTaskId.value);
 });
 
-// 状态点样式
-const statusClass = computed(() => ({
-  'connected': isConnected.value && !isExecuting.value,
-  'executing': isExecuting.value,
-  'disconnected': !isConnected.value,
-  'error': !!connectionError.value
-}));
-
-// 自动滚动到底部
-watch(outputHistory, () => {
-  nextTick(() => {
-    scrollToBottom();
-  });
-}, { deep: true });
-
-// 监听错误
-watch(connectionError, (error) => {
-  if (error) {
-    ElMessage.error(error);
-  }
-});
-
-const scrollToBottom = () => {
-  if (outputContainer.value) {
-    outputContainer.value.scrollTop = outputContainer.value.scrollHeight;
-  }
+// 方法
+const checkMobile = () => {
+  isMobile.value = window.innerWidth < 768;
 };
 
 const toggleConnection = async () => {
-  if (store.isConnected) {
+  if (isConnected.value) {
     store.disconnect();
+    ElMessage.info('已断开连接');
   } else {
     isConnecting.value = true;
     try {
-      await store.connect(host.value, parseInt(port.value));
+      await store.connect(host.value, port.value);
       ElMessage.success('连接成功');
     } catch (error) {
       ElMessage.error('连接失败');
@@ -212,49 +243,113 @@ const toggleConnection = async () => {
   }
 };
 
-const executeCommand = () => {
-  if (command.value.trim() && isConnected.value) {
-    // 显示输入的命令
-    // store.addToOutputHistory({
-    //   type: 'command',
-    //   content: command.value.trim()
-    // });
-    
-    store.executeCommand(command.value.trim());
-    command.value = '';
-    currentInput.value = '';
+const handleTaskSelect = (taskId: string) => {
+  currentTaskId.value = taskId;
+};
+
+const handleMobileTaskSelect = (taskId: string) => {
+  currentTaskId.value = taskId;
+  mobileDrawerVisible.value = false; // 选择后关闭抽屉
+};
+
+const handleDeleteTask = (taskId: string) => {
+  store.deleteTask(taskId);
+  
+  // 如果删除的是当前选中的任务，选择下一个任务
+  if (currentTaskId.value === taskId) {
+    const remainingTasks = tasks.value.filter(task => task.id !== taskId);
+    currentTaskId.value = remainingTasks.length > 0 ? remainingTasks[0].id : '';
+  }
+  
+  ElMessage.success('任务已删除');
+};
+
+const handleExecuteCommand = (command: string) => {
+  const taskId = store.executeCommand(command);
+  if (taskId) {
+    currentTaskId.value = taskId; // 自动选中新任务
   }
 };
 
-const executeQuickCommand = (cmd: string) => {
-  command.value = cmd;
-  executeCommand();
+const handleReexecuteTask = (taskId: string) => {
+  const task = tasks.value.find(t => t.id === taskId);
+  if (task) {
+    const newTaskId = store.executeCommand(task.command);
+    if (newTaskId) {
+      currentTaskId.value = newTaskId; // 选中重新执行的任务
+    }
+  }
 };
 
-const clearOutput = () => {
-  store.clearOutput();
-  ElMessage.info('终端已清屏');
+const handleAddToFavorites = (command: string) => {
+  const name = command.length > 20 ? command.substring(0, 20) + '...' : command;
+  store.addToFavorites({
+    id: Date.now().toString(),
+    name,
+    command,
+    category: 'user'
+  });
+  ElMessage.success('已添加到收藏');
+};
+
+const clearAllTasks = () => {
+  store.clearAllTasks();
+  currentTaskId.value = '';
+  ElMessage.success('所有任务已清空');
+};
+
+const refreshTasks = () => {
+  // 这里可以添加刷新任务状态的逻辑
+  ElMessage.success('任务列表已刷新');
 };
 
 const clearError = () => {
   store.clearError();
 };
 
-// 键盘快捷键
-const handleKeyPress = (event: KeyboardEvent) => {
-  if (event.ctrlKey && event.key === 'l') {
-    event.preventDefault();
-    clearOutput();
-  }
+const toggleMobileDrawer = () => {
+  mobileDrawerVisible.value = !mobileDrawerVisible.value;
 };
 
+const getConnectionTagType = (): string => {
+  if (isConnecting.value) return 'warning';
+  if (connectionError.value) return 'danger';
+  if (isConnected.value) return 'success';
+  return 'info';
+};
+
+const getConnectionStatus = (): string => {
+  if (isConnecting.value) return '连接中...';
+  if (connectionError.value) return '连接失败';
+  if (isConnected.value) return isExecuting.value ? '执行中' : '已连接';
+  return '未连接';
+};
+
+// 自动选择第一个任务
+watch(tasks, (newTasks) => {
+  if (newTasks.length > 0 && !currentTaskId.value) {
+    currentTaskId.value = newTasks[0].id;
+  }
+}, { immediate: true });
+
+// 响应式布局监听
 onMounted(() => {
-  window.addEventListener('keydown', handleKeyPress);
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+  
+  // 尝试自动连接本地服务
+  if (!isConnected.value) {
+    setTimeout(() => {
+      toggleConnection();
+    }, 1000);
+  }
 });
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeyPress);
-  if (store.isConnected) {
+  window.removeEventListener('resize', checkMobile);
+  
+  // 清理连接
+  if (isConnected.value) {
     store.disconnect();
   }
 });
@@ -262,209 +357,113 @@ onUnmounted(() => {
 
 <style scoped>
 .terminal-container {
-  height: 100%;
+  height: 90vh;
   display: flex;
   flex-direction: column;
-  /* background: #f5f7fa; */
-  border-radius: 8px;
+}
+
+.terminal-header {
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+}
+
+.main-container {
+  flex: 1;
   overflow: hidden;
 }
 
-.connection-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  /* background: white; */
-  border-bottom: 1px solid #e4e7ed;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.task-aside {
+  border-right: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
 }
 
-.connection-controls {
+.output-main {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
 }
 
-.status-indicator {
+.connection-prompt {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  padding: 40px;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.status-dot.connected {
-  background: #67c23a;
-  box-shadow: 0 0 6px #67c23a;
-}
-
-.status-dot.executing {
-  background: #e6a23c;
-  box-shadow: 0 0 6px #e6a23c;
-  animation: pulse 1.5s infinite;
-}
-
-.status-dot.disconnected {
-  background: #909399;
-}
-
-.status-dot.error {
-  background: #f56c6c;
-  box-shadow: 0 0 6px #f56c6c;
-}
-
-.status-text {
-  font-size: 14px;
-  color: #606266;
-  font-weight: 500;
+.command-footer {
+  border-top: 1px solid var(--el-border-color-light);
+  padding: 0;
+  background: var(--el-bg-color);
 }
 
 .session-id {
   font-size: 12px;
-  color: #909399;
+  opacity: 0.7;
+  margin-left: 4px;
 }
 
-.terminal-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  gap: 16px;
+.error-alert {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: 500px;
 }
 
-.output-panel {
-  flex: 1;
-  background: #1e1e1e;
-  border-radius: 6px;
-  padding: 16px;
-  overflow-y: auto;
-  color: #d4d4d4;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  line-height: 1.5;
-  position: relative;
+.mobile-task-drawer {
+  z-index: 3000;
 }
 
-.output-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin-bottom: 4px;
+.rotating {
+  animation: rotate 1s linear infinite;
 }
 
-.output-line.command-line {
-  color: #569cd6;
-  font-weight: 500;
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.prompt {
-  color: #4ec9b0;
-  margin-right: 8px;
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .terminal-header {
+    padding: 12px 16px;
+  }
+  
+  .terminal-header .el-col:first-child {
+    span: 24;
+    margin-bottom: 8px;
+  }
+  
+  .terminal-header .el-col:last-child {
+    span: 24;
+  }
+  
+  .terminal-header .el-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .connection-prompt {
+    padding: 20px;
+  }
 }
 
-.output-content {
-  color: inherit;
-}
-
-.cursor {
-  color: #d4d4d4;
-  animation: blink 1s infinite;
-}
-
-.input-line {
-  color: #569cd6;
-  font-weight: 500;
-}
-
-.command-input {
-  color: #d4d4d4;
-}
-
-.execution-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #e6a23c;
-  margin-top: 8px;
-}
-
-.loading-icon {
-  animation: spin 1s linear infinite;
-}
-
-.input-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.input-prompt {
-  color: #4ec9b0;
-  font-weight: bold;
-  padding: 0 8px;
-}
-
-.quick-commands {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.quick-commands .el-button {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
-}
-
-.connection-prompt {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* background: white; */
-}
-
-.error-message {
-  margin: 0 20px 20px;
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-:deep(.el-input__inner) {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-}
-
-:deep(.output-panel::-webkit-scrollbar) {
-  width: 6px;
-}
-
-:deep(.output-panel::-webkit-scrollbar-track) {
-  background: #2d2d30;
-}
-
-:deep(.output-panel::-webkit-scrollbar-thumb) {
-  background: #3e3e42;
-  border-radius: 3px;
-}
-
-:deep(.output-panel::-webkit-scrollbar-thumb:hover) {
-  background: #4f4f4f;
+@media (max-width: 480px) {
+  .terminal-header .el-space {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .terminal-header .el-input {
+    width: 120px !important;
+  }
 }
 </style>

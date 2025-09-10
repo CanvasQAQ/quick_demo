@@ -26,3 +26,37 @@ export interface ConnectionResult {
   sessionId?: string;
   message?: string;
 }
+
+// 新的任务管理相关类型定义
+export interface Task {
+  id: string;
+  command: string;
+  status: 'pending' | 'running' | 'success' | 'error';
+  startTime: Date;
+  endTime?: Date;
+  duration?: number; // 执行时长（秒）
+  output: string;
+  exitCode?: number;
+  sessionId: string;
+}
+
+export interface TaskGroup {
+  id: string;
+  name: string;
+  tasks: Task[];
+  collapsed: boolean;
+}
+
+export interface CommandHistory {
+  commands: string[];
+  maxSize: number;
+  currentIndex: number;
+}
+
+export interface FavoriteCommand {
+  id: string;
+  name: string;
+  command: string;
+  description?: string;
+  category?: string;
+}

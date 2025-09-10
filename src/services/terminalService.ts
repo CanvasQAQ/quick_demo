@@ -267,7 +267,7 @@ class TerminalService {
   }
 
   // 清理所有监听器
-  cleanup(): void {
+  removeAllListeners(): void {
     this.outputCallbacks = [];
     this.errorCallbacks = [];
     this.statusCallbacks = [];

@@ -1,6 +1,5 @@
 <template>
   <div class="terminal-manager">
-    <h2>Shell Terminal Manager</h2>
     <Terminal />
   </div>
 </template>
@@ -11,6 +10,7 @@ import Terminal from '../components/Terminal/Terminal.vue';
 
 <style scoped>
 .terminal-manager {
-  padding: 20px;
+  padding: 0px;
+  margin: 0px;
 }
 </style>
