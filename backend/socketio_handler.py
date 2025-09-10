@@ -3,6 +3,7 @@ import threading
 import uuid
 import os
 import time
+import signal
 from flask_socketio import SocketIO, emit
 from typing import Dict, Optional
 import logging
@@ -69,9 +70,11 @@ class TerminalSession:
                         continue
                     
                     logger.debug("Output: %s", line.strip())
+                    # 确保每行输出都包含换行符
+                    output_line = line.rstrip('\r\n') + '\n'
                     self.socketio.emit('terminal_output', {
                         'sessionId': self.session_id,
-                        'output': line.rstrip(),
+                        'output': output_line,
                         'type': 'stdout'
                     })
             
@@ -99,6 +102,56 @@ class TerminalSession:
         finally:
             self.is_running = False
             logger.debug("Output reading thread finished for session: %s", self.session_id)
+    
+    def interrupt_command(self):
+        """中断当前运行的命令"""
+        logger.debug("Interrupting command for session: %s", self.session_id)
+        if self.process and self.process.poll() is None:
+            try:
+                if os.name == 'nt':  # Windows
+                    # Windows使用CTRL_BREAK_EVENT
+                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:  # Unix/Linux
+                    # Unix/Linux使用SIGINT (Ctrl+C)
+                    self.process.send_signal(signal.SIGINT)
+                    
+                # 等待进程响应中断信号
+                try:
+                    self.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    # 如果2秒内没有响应，强制终止
+                    logger.warning("Process didn't respond to interrupt, forcing termination")
+                    self.process.terminate()
+                    try:
+                        self.process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        self.process.kill()
+                
+                self.socketio.emit('terminal_output', {
+                    'sessionId': self.session_id,
+                    'output': '\n^C\n',
+                    'type': 'system'
+                })
+                
+                self.socketio.emit('terminal_complete', {
+                    'sessionId': self.session_id,
+                    'exitCode': -2,  # 中断退出码
+                    'message': 'Command interrupted by user'
+                })
+                
+                logger.info("Command interrupted successfully for session: %s", self.session_id)
+                return True
+                
+            except Exception as e:
+                logger.error("Failed to interrupt command: %s", e)
+                self.socketio.emit('terminal_error', {
+                    'sessionId': self.session_id,
+                    'error': 'Failed to interrupt command: ' + str(e)
+                })
+                return False
+        else:
+            logger.debug("No running process to interrupt for session: %s", self.session_id)
+            return False
     
     def cleanup(self):
         """清理资源 - Windows 兼容版本"""
@@ -200,6 +253,45 @@ class TerminalHandler:
             )
             thread.daemon = True
             thread.start()
+        
+        @self.socketio.on('terminal_interrupt')
+        def handle_interrupt(data):
+            logger.debug("Received terminal_interrupt event: %s", data)
+            session_id = data.get('sessionId')
+            
+            if not session_id or session_id not in self.sessions:
+                error_msg = 'Session not found: ' + (session_id or 'unknown')
+                logger.error(error_msg)
+                emit('terminal_error', {
+                    'sessionId': session_id or 'unknown',
+                    'error': error_msg
+                })
+                return
+            
+            session = self.sessions[session_id]
+            
+            if not session.is_running:
+                logger.debug("No running command to interrupt for session: %s", session_id)
+                emit('terminal_output', {
+                    'sessionId': session_id,
+                    'output': 'No running command to interrupt.\n',
+                    'type': 'system'
+                })
+                return
+            
+            # 中断命令
+            success = session.interrupt_command()
+            if success:
+                emit('terminal_output', {
+                    'sessionId': session_id,
+                    'output': 'Command interrupted.\n',
+                    'type': 'system'
+                })
+            else:
+                emit('terminal_error', {
+                    'sessionId': session_id,
+                    'error': 'Failed to interrupt command'
+                })
         
         @self.socketio.on('terminal_disconnect')
         def handle_disconnect_event(data):

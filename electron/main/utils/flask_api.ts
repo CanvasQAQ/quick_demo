@@ -83,7 +83,7 @@ export class FlaskApiManager {
   /**
    * 获取服务器状态
    */
-  private async getServerStatus(): Promise<FlaskServerStatus> {
+  async getServerStatus(): Promise<FlaskServerStatus> {
     return {
       isRunning: this.flaskProcess !== null,
       port: this.currentPort,

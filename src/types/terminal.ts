@@ -60,3 +60,19 @@ export interface FavoriteCommand {
   description?: string;
   category?: string;
 }
+
+// 端口选择相关类型定义
+export interface PortOption {
+  port: number;
+  source: 'flask' | 'ssh' | 'manual';
+  description: string;
+  status?: 'active' | 'inactive' | 'unknown';
+  host?: string;
+}
+
+export interface AvailablePortsResponse {
+  flaskPorts: PortOption[];
+  sshPorts: PortOption[];
+  success: boolean;
+  message?: string;
+}

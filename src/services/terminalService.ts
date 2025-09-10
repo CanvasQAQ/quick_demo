@@ -153,6 +153,21 @@ class TerminalService {
     });
   }
 
+  // 中断当前命令
+  interruptCommand(): boolean {
+    if (!this.socket || !this.sessionId) {
+      console.error('Not connected to terminal');
+      return false;
+    }
+
+    console.log('Sending interrupt signal');
+    this.socket.emit('terminal_interrupt', {
+      sessionId: this.sessionId
+    });
+    
+    return true;
+  }
+
   // 获取当前会话ID
   getSessionId(): string | null {
     return this.sessionId;

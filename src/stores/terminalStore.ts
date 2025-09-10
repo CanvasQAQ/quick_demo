@@ -256,6 +256,30 @@ export const useTerminalStore = defineStore('terminal', {
       this.connectionError = null;
     },
 
+    // 中断当前执行的命令
+    interruptCurrentCommand(): boolean {
+      if (!this.isConnected || !this.isExecuting) {
+        return false;
+      }
+
+      const success = terminalService.interruptCommand();
+      if (success) {
+        // 将正在运行的任务标记为中断
+        const runningTasks = this.tasks.filter(task => task.status === 'running');
+        runningTasks.forEach(task => {
+          task.status = 'error';
+          task.endTime = new Date();
+          task.exitCode = -2; // 中断退出码
+          task.duration = (task.endTime.getTime() - task.startTime.getTime()) / 1000;
+          task.output += '\n[命令已中断]';
+        });
+        
+        this.isExecuting = false;
+      }
+      
+      return success;
+    },
+
     // 清除输出历史（保持兼容性）
     clearOutput() {
       this.outputHistory = [];

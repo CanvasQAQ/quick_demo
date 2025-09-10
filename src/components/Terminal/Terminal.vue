@@ -17,13 +17,55 @@
               </template>
             </el-input>
             
-            <el-input 
-              v-model="port" 
-              placeholder="Port" 
+            <el-select
+              v-model="port"
+              placeholder="选择或输入端口"
               size="small"
-              type="number"
-              style="width: 100px"
+              style="width: 200px"
               :disabled="isConnected"
+              :loading="isLoadingPorts"
+              filterable
+              allow-create
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Connection /></el-icon>
+              </template>
+              <el-option
+                v-for="portOption in availablePorts"
+                :key="`${portOption.source}-${portOption.port}`"
+                :value="portOption.port"
+                :label="`${portOption.port} - ${portOption.description}`"
+              >
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <span>{{ portOption.port }} - {{ portOption.description }}</span>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <el-tag
+                      :type="portOption.source === 'flask' ? 'success' : portOption.source === 'ssh' ? 'warning' : 'info'"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ portOption.source === 'flask' ? 'Flask' : portOption.source === 'ssh' ? 'SSH' : '手动' }}
+                    </el-tag>
+                    <el-tag
+                      :type="portOption.status === 'active' ? 'success' : 'info'"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ portOption.status === 'active' ? '活跃' : '未知' }}
+                    </el-tag>
+                  </div>
+                </div>
+              </el-option>
+            </el-select>
+            
+            <el-button 
+              size="small" 
+              :icon="Refresh"
+              @click="fetchAvailablePorts"
+              :loading="isLoadingPorts"
+              :disabled="isConnected"
+              title="刷新可用端口"
             />
             
             <el-button 
@@ -161,6 +203,7 @@
         :favorite-commands="favoriteCommands"
         @execute-command="handleExecuteCommand"
         @add-to-favorites="handleAddToFavorites"
+        @interrupt-command="handleInterruptCommand"
       />
     </el-footer>
 
@@ -180,7 +223,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useTerminalStore } from '@/stores/terminalStore';
-import { FavoriteCommand } from '@/types/terminal';
+import { FavoriteCommand, PortOption, AvailablePortsResponse } from '@/types/terminal';
 import TaskSidebar from './TaskSidebar.vue';
 import TaskOutput from './TaskOutput.vue';
 import CommandInput from './CommandInput.vue';
@@ -204,6 +247,10 @@ const isConnecting = ref(false);
 const currentTaskId = ref<string>('');
 const mobileDrawerVisible = ref(false);
 
+// 端口选择相关
+const availablePorts = ref<PortOption[]>([]);
+const isLoadingPorts = ref(false);
+
 // 移动端检测
 const isMobile = ref(false);
 
@@ -224,6 +271,59 @@ const currentTask = computed(() => {
 // 方法
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 768;
+};
+
+// 获取可用端口
+const fetchAvailablePorts = async () => {
+  if (!window.electronAPI?.getAvailablePorts) return;
+  
+  isLoadingPorts.value = true;
+  try {
+    const response = await window.electronAPI.getAvailablePorts();
+    if (response.success) {
+      const { sshPorts = [], flaskPorts = [] } = response.data;
+      
+      // 合并所有端口并添加默认选项
+      availablePorts.value = [
+        ...flaskPorts,
+        ...sshPorts,
+        // 添加默认的5000端口选项
+        {
+          port: 5000,
+          source: 'manual' as const,
+          description: '默认Flask端口',
+          status: 'unknown' as const,
+          host: 'localhost'
+        }
+      ];
+      
+      // 去重：如果已存在相同端口，保留状态更明确的那个
+      const uniquePorts = new Map<number, PortOption>();
+      availablePorts.value.forEach(portOption => {
+        const existing = uniquePorts.get(portOption.port);
+        if (!existing || 
+            (existing.status === 'unknown' && portOption.status !== 'unknown')) {
+          uniquePorts.set(portOption.port, portOption);
+        }
+      });
+      
+      availablePorts.value = Array.from(uniquePorts.values()).sort((a, b) => a.port - b.port);
+    }
+  } catch (error) {
+    console.error('获取可用端口失败:', error);
+    // 添加默认端口选项作为fallback
+    availablePorts.value = [
+      {
+        port: 5000,
+        source: 'manual' as const,
+        description: '默认Flask端口',
+        status: 'unknown' as const,
+        host: 'localhost'
+      }
+    ];
+  } finally {
+    isLoadingPorts.value = false;
+  }
 };
 
 const toggleConnection = async () => {
@@ -292,6 +392,16 @@ const handleAddToFavorites = (command: string) => {
   ElMessage.success('已添加到收藏');
 };
 
+const handleInterruptCommand = (): boolean => {
+  const success = store.interruptCurrentCommand();
+  if (success) {
+    ElMessage.success('命令已中断');
+  } else {
+    ElMessage.warning('无正在运行的命令或中断失败');
+  }
+  return success;
+};
+
 const clearAllTasks = () => {
   store.clearAllTasks();
   currentTaskId.value = '';
@@ -336,6 +446,9 @@ watch(tasks, (newTasks) => {
 onMounted(() => {
   checkMobile();
   window.addEventListener('resize', checkMobile);
+  
+  // 获取可用端口
+  fetchAvailablePorts();
   
   // 尝试自动连接本地服务
   if (!isConnected.value) {

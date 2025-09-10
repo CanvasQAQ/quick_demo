@@ -68,15 +68,41 @@ python backend/app.py [port]
 - Health check endpoints
 - Real-time WebSocket communication
 
+### Terminal Manager (`/8` - Terminal管理器)
+高级终端管理界面，提供完整的命令执行和任务管理功能：
+
+#### 连接管理
+- **智能端口选择**: 自动检测Flask API和SSH隧道的活跃端口
+- **连接状态监控**: 实时显示连接状态和会话信息
+- **灵活连接配置**: 支持自定义主机和端口
+
+#### 任务执行系统
+- **实时命令执行**: 通过SocketIO与Python后端实时通信
+- **多任务管理**: 支持并行执行多个命令，独立跟踪状态
+- **任务历史**: 完整的执行记录，包括开始时间、执行时长、退出码
+- **输出流显示**: 实时显示stdout、stderr和系统消息
+
+#### 用户界面特性
+- **响应式布局**: 桌面端双栏布局，移动端抽屉式任务列表
+- **命令输入增强**: 支持命令历史、自动完成和收藏命令
+- **任务操作**: 任务重新执行、删除、清空等管理功能
+- **状态指示**: 丰富的视觉反馈和状态标识
+
+#### 技术实现
+- **前端组件**: `Terminal.vue`, `TaskSidebar.vue`, `TaskOutput.vue`, `CommandInput.vue`
+- **状态管理**: `terminalStore.ts` 使用Pinia管理终端状态
+- **后端通信**: 通过SocketIO与Flask后端建立WebSocket连接
+- **端口发现**: IPC接口自动获取Flask API和SSH隧道端口
+
 ### Vue Router Structure
 Routes are numbered (1-8) corresponding to sidebar menu items:
 - `/1` - Home dashboard
-- `/2` - Component demos
+- `/2` - Component demos  
 - `/3` - Pinia state management demos
 - `/4` - Settings panel
 - `/5` - Flask API integration demo
 - `/6` - SSH configuration interface
-- `/8` - Terminal manager
+- `/8` - Terminal manager (高级终端管理界面)
 
 ## Development Notes
 

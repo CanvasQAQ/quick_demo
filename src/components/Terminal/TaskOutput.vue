@@ -228,7 +228,8 @@ const outputContent = ref();
 
 // 计算属性
 const scrollbarHeight = computed(() => {
-  return showSearchBar.value ? '100%' : '480px';
+  // 固定高度，避免搜索栏影响滚动容器
+  return '480px';
 });
 
 const highlightedOutput = computed(() => {
@@ -260,13 +261,15 @@ const formatTime = (date: Date): string => {
 };
 
 const formatOutput = (output: string): string => {
-  // 基本的HTML转义
+  if (!output) return '';
+  
+  // 基本的HTML转义，保留换行符
   const escaped = output
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>')
-    .replace(/ /g, '&nbsp;');
+    .replace(/\r?\n/g, '<br>')  // 处理不同平台的换行符
+    .replace(/ {2,}/g, (match) => '&nbsp;'.repeat(match.length)); // 保留多个空格
   
   // 简单的语法高亮（可扩展）
   return escaped
@@ -308,7 +311,9 @@ const getStatusText = (status: Task['status']): string => {
 };
 
 const getOutputLines = (output: string): number => {
-  return output.split('\n').length;
+  if (!output || output.trim() === '') return 0;
+  // 更准确的行数计算，处理不同平台的换行符
+  return output.split(/\r?\n/).filter(line => line !== '').length;
 };
 
 const getOutputSize = (output: string): string => {
@@ -371,6 +376,14 @@ const clearSearch = () => {
   searchKeyword.value = '';
   matchCount.value = 0;
   currentMatchIndex.value = 0;
+  
+  // 清除搜索高亮样式
+  nextTick(() => {
+    const highlights = outputContent.value?.querySelectorAll('.search-highlight, .current-match');
+    highlights?.forEach(hl => {
+      hl.classList.remove('current-match');
+    });
+  });
 };
 
 const nextMatch = () => {
@@ -393,9 +406,24 @@ const scrollToMatch = () => {
   nextTick(() => {
     const highlights = outputContent.value?.querySelectorAll('.search-highlight');
     if (highlights && highlights[currentMatchIndex.value]) {
-      highlights[currentMatchIndex.value].scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
+      const element = highlights[currentMatchIndex.value];
+      
+      // 使用scrollbar的scrollTo方法而不是element的scrollIntoView
+      if (outputScrollbar.value) {
+        const scrollbarEl = outputScrollbar.value.wrapRef;
+        const elementTop = element.offsetTop - scrollbarEl.offsetTop;
+        const scrollTop = Math.max(0, elementTop - scrollbarEl.clientHeight / 2);
+        
+        outputScrollbar.value.setScrollTop(scrollTop);
+      }
+      
+      // 高亮当前匹配项
+      highlights.forEach((hl, index) => {
+        if (index === currentMatchIndex.value) {
+          hl.classList.add('current-match');
+        } else {
+          hl.classList.remove('current-match');
+        }
       });
     }
   });
@@ -525,6 +553,12 @@ watch(() => props.currentTask?.output, () => {
   padding: 2px 4px;
   border-radius: 3px;
   font-weight: 600;
+}
+
+:deep(.current-match) {
+  background-color: var(--el-color-primary-light-5) !important;
+  color: var(--el-color-primary-dark-2) !important;
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-3);
 }
 
 .rotating {

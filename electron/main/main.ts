@@ -59,7 +59,7 @@ ipcMain.handle('save-api-config', (event, config: ApiConfig): void => {
 function initializeManagers(): void {
   sshManager = new SSHTunnelManager();
   securityManager = new SecurityManager();
-  ipcHandlers = new IPCHandlers(sshManager, securityManager, mainWindow);
+  ipcHandlers = new IPCHandlers(sshManager, securityManager, flaskApi, mainWindow);
 }
 
 function registerIpcHandlers(): void {

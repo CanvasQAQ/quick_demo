@@ -221,6 +221,7 @@ interface Props {
 interface Emits {
   (e: 'execute-command', command: string): void;
   (e: 'add-to-favorites', command: string): void;
+  (e: 'interrupt-command'): boolean;
 }
 
 const props = defineProps<Props>();
@@ -418,10 +419,15 @@ const handleGlobalKeyDown = (event: KeyboardEvent) => {
     executeQuickCommand('clear');
   }
   
-  // Ctrl+C 中断（这里只是示例，实际需要向后端发送中断信号）
+  // Ctrl+C 中断
   if (event.ctrlKey && event.key === 'c' && props.isExecuting) {
     event.preventDefault();
-    ElMessage.warning('命令中断（功能待实现）');
+    const success = emit('interrupt-command');
+    if (success) {
+      ElMessage.success('命令已中断');
+    } else {
+      ElMessage.warning('无法中断命令');
+    }
   }
 };
 

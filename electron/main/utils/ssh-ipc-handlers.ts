@@ -1,16 +1,19 @@
 import { ipcMain } from 'electron';
 import { SSHTunnelManager } from './ssh-tunnel-manager';
 import { SecurityManager } from './security-manager';
+import { FlaskApiManager } from './flask_api';
 import { dialog, BrowserWindow } from 'electron';
 
 export class IPCHandlers {
   private sshManager: SSHTunnelManager;
   private securityManager: SecurityManager;
+  private flaskApiManager: FlaskApiManager;
   private mainWindow: BrowserWindow | null;
 
-  constructor(sshManager: SSHTunnelManager, securityManager: SecurityManager, mainWindow: BrowserWindow | null) {
+  constructor(sshManager: SSHTunnelManager, securityManager: SecurityManager, flaskApiManager: FlaskApiManager, mainWindow: BrowserWindow | null) {
     this.sshManager = sshManager;
     this.securityManager = securityManager;
+    this.flaskApiManager = flaskApiManager;
     this.mainWindow = mainWindow;
   }
 
@@ -50,6 +53,42 @@ export class IPCHandlers {
         return this.createSuccessResponse(status);
       } catch (error) {
         return this.createErrorResponse(error, '获取连接状态失败');
+      }
+    });
+
+    // 获取可用端口 - 新增接口
+    ipcMain.handle('get-available-ports', async () => {
+      try {
+        // 获取SSH隧道端口
+        const sshPorts = this.sshManager.getActivePorts().map(portInfo => ({
+          port: portInfo.port,
+          source: 'ssh' as const,
+          description: `SSH隧道: ${portInfo.target}`,
+          status: 'active' as const,
+          host: 'localhost'
+        }));
+
+        // 获取Flask API端口
+        const flaskStatus = await this.flaskApiManager.getServerStatus();
+        const flaskPorts: any[] = [];
+        
+        if (flaskStatus.isRunning && flaskStatus.port) {
+          flaskPorts.push({
+            port: flaskStatus.port,
+            source: 'flask' as const,
+            description: `Flask API服务器 (PID: ${flaskStatus.pid || 'N/A'})`,
+            status: 'active' as const,
+            host: 'localhost'
+          });
+        }
+
+        return this.createSuccessResponse({
+          sshPorts,
+          flaskPorts,
+          success: true
+        });
+      } catch (error) {
+        return this.createErrorResponse(error, '获取可用端口失败');
       }
     });
   }

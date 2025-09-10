@@ -285,6 +285,25 @@ export class SSHTunnelManager {
     return { ...this.connectionStatus };
   }
 
+  // 获取所有活跃的本地端口
+  getActivePorts(): Array<{port: number, target: string}> {
+    const activePorts: Array<{port: number, target: string}> = [];
+    
+    this.forwardingServers.forEach((server, port) => {
+      // 检查服务器是否正在监听
+      if (server.listening) {
+        // 从端口转发配置中查找对应的目标
+        // 这里我们需要存储端口到目标的映射，暂时使用简单的描述
+        activePorts.push({
+          port: port,
+          target: `localhost:${port}` // 可以改进为存储实际的目标地址
+        });
+      }
+    });
+    
+    return activePorts;
+  }
+
   // 更新连接状态
   private updateConnectionStatus(): void {
     this.connectionStatus.activeConnections = this.connections.size;

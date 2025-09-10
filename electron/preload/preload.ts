@@ -70,6 +70,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 文件对话框
   showOpenDialog: (options) => 
     ipcRenderer.invoke('show-open-dialog', options),
+  
+  // 获取可用端口 - 新增接口
+  getAvailablePorts: () => 
+    ipcRenderer.invoke('get-available-ports'),
+  
   // 事件监听
   onServerStatusChange: (callback: (status: FlaskServerStatus) => void) => {
     ipcRenderer.on('flask-status-changed', (event, status: FlaskServerStatus) => {
@@ -121,6 +126,10 @@ declare global {
       
       // 文件对话框
       showOpenDialog: (options: any) => Promise<any>;
+      
+      // 获取可用端口
+      getAvailablePorts: () => Promise<any>;
+      
       // 工具函数
       getCurrentPort: () => Promise<number | null>;
       
