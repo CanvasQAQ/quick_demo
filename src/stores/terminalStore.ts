@@ -90,8 +90,8 @@ export const useTerminalStore = defineStore('terminal', {
       terminalService.removeAllListeners();
     },
 
-    // 执行命令 - 返回任务ID
-    executeCommand(command: string): string {
+    // 执行命令 - 返回任务ID (PTY版本)
+    executeCommand(command: string, options?: { rows?: number; cols?: number }): string {
       if (!this.isConnected || !this.sessionId) {
         throw new Error('Not connected to terminal');
       }
@@ -114,8 +114,8 @@ export const useTerminalStore = defineStore('terminal', {
       // 添加到命令历史
       this.addToCommandHistory(command.trim());
 
-      // 执行命令，传递taskId
-      terminalService.executeCommand(command.trim(), task.id);
+      // 执行命令，传递taskId和终端尺寸选项
+      terminalService.executeCommand(command.trim(), task.id, options);
       
       return task.id;
     },
@@ -280,6 +280,24 @@ export const useTerminalStore = defineStore('terminal', {
     // 清除错误
     clearError() {
       this.connectionError = null;
+    },
+
+    // 发送输入到终端
+    sendInputToTerminal(taskId: string, data: string): boolean {
+      if (!this.isConnected) {
+        return false;
+      }
+
+      return terminalService.sendInput(taskId, data);
+    },
+
+    // 调整终端尺寸
+    resizeTerminal(taskId: string, rows: number, cols: number): boolean {
+      if (!this.isConnected) {
+        return false;
+      }
+
+      return terminalService.resizeTerminal(taskId, rows, cols);
     },
 
     // 中断指定任务

@@ -117,41 +117,78 @@ class TerminalService {
 
 
 
-  // 执行命令
-  async executeCommand(command: string, taskId: string): Promise<boolean> {
+  // 执行命令 (PTY版本)
+  async executeCommand(command: string, taskId: string, options?: { rows?: number; cols?: number }): Promise<boolean> {
     if (!this.socket || !this.sessionId) {
       console.error('Not connected to terminal');
       return false;
     }
 
     return new Promise((resolve) => {
-      console.log('Executing command:', command, 'Task ID:', taskId);
+      console.log('Executing PTY command:', command, 'Task ID:', taskId, 'Options:', options);
 
       // 监听命令完成事件
       const completeHandler = (data: any) => {
         if (data && data.sessionId === this.sessionId && data.taskId === taskId) {
           this.socket?.off('terminal_complete', completeHandler);
-          console.log('Command execution completed for task:', taskId);
+          console.log('PTY command execution completed for task:', taskId);
           resolve(true);
         }
       };
 
       this.socket?.on('terminal_complete', completeHandler);
 
-      // 发送命令
+      // 发送命令 (PTY版本)
       this.socket?.emit('terminal_command', {
         sessionId: this.sessionId,
         taskId: taskId,
-        command: command.trim()
+        command: command.trim(),
+        rows: options?.rows || 24,
+        cols: options?.cols || 80
       });
 
       // 设置命令执行超时
       setTimeout(() => {
         this.socket?.off('terminal_complete', completeHandler);
-        console.warn('Command execution timeout for task:', taskId);
+        console.warn('PTY command execution timeout for task:', taskId);
         resolve(false);
       }, 30000);
     });
+  }
+
+  // 向终端发送输入 (PTY交互)
+  sendInput(taskId: string, data: string): boolean {
+    if (!this.socket || !this.sessionId) {
+      console.error('Not connected to terminal');
+      return false;
+    }
+
+    console.log('Sending input to terminal:', taskId, data);
+    this.socket.emit('terminal_input', {
+      sessionId: this.sessionId,
+      taskId: taskId,
+      data: data
+    });
+    
+    return true;
+  }
+
+  // 调整终端尺寸
+  resizeTerminal(taskId: string, rows: number, cols: number): boolean {
+    if (!this.socket || !this.sessionId) {
+      console.error('Not connected to terminal');
+      return false;
+    }
+
+    console.log('Resizing terminal:', taskId, `${cols}x${rows}`);
+    this.socket.emit('terminal_resize', {
+      sessionId: this.sessionId,
+      taskId: taskId,
+      rows: rows,
+      cols: cols
+    });
+    
+    return true;
   }
 
   // 中断指定任务
@@ -253,7 +290,9 @@ class TerminalService {
     // 监听终端输出
     this.socket.on('terminal_output', (data: any) => {
       if (data && data.sessionId === this.sessionId && data.output) {
-        console.log('Terminal output for task:', data.taskId, data.output.slice(0, 50) + '...');
+        console.log('Terminal output for task:', data.taskId, 'Output length:', data.output.length);
+        // 调试：显示原始输出内容（前50个字符）
+        console.log('Raw output content:', JSON.stringify(data.output.slice(0, 100)));
         this.triggerOutput(data.output, data.taskId);
       }
     });

@@ -170,9 +170,14 @@
 
       <!-- 右侧输出展示区域 -->
       <el-main class="output-main">
-        <TaskOutput
+        <XtermTaskOutput
           :current-task="currentTask"
+          :is-connected="isConnected"
           @reexecute-task="handleReexecuteTask"
+          @interrupt-task="handleInterruptTask"
+          @send-input="handleSendInput"
+          @resize-terminal="handleResizeTerminal"
+          ref="xtermOutputRef"
         />
       </el-main>
     </el-container>
@@ -227,7 +232,7 @@ import { ElMessage } from 'element-plus';
 import { useTerminalStore } from '@/stores/terminalStore';
 import { FavoriteCommand, PortOption, AvailablePortsResponse } from '@/types/terminal';
 import TaskSidebar from './TaskSidebar.vue';
-import TaskOutput from './TaskOutput.vue';
+import XtermTaskOutput from './XtermTaskOutput.vue';
 import CommandInput from './CommandInput.vue';
 import {
   Connection,
@@ -248,6 +253,7 @@ const port = ref(5000);
 const isConnecting = ref(false);
 const currentTaskId = ref<string>('');
 const mobileDrawerVisible = ref(false);
+const xtermOutputRef = ref<InstanceType<typeof XtermTaskOutput>>();
 
 // 端口选择相关
 const availablePorts = ref<PortOption[]>([]);
@@ -367,16 +373,34 @@ const handleDeleteTask = (taskId: string) => {
 };
 
 const handleExecuteCommand = (command: string) => {
-  const taskId = store.executeCommand(command);
+  // 获取终端尺寸 (如果xterm已初始化)
+  const terminalSize = xtermOutputRef.value ? 
+    { rows: 24, cols: 80 } : // 从xterm获取实际尺寸
+    { rows: 24, cols: 80 };
+  
+  const taskId = store.executeCommand(command, terminalSize);
   if (taskId) {
     currentTaskId.value = taskId; // 自动选中新任务
   }
 };
 
+const handleSendInput = (data: { taskId: string; data: string }) => {
+  store.sendInputToTerminal(data.taskId, data.data);
+};
+
+const handleResizeTerminal = (data: { taskId: string; rows: number; cols: number }) => {
+  store.resizeTerminal(data.taskId, data.rows, data.cols);
+};
+
 const handleReexecuteTask = (taskId: string) => {
   const task = tasks.value.find(t => t.id === taskId);
   if (task) {
-    const newTaskId = store.executeCommand(task.command);
+    // 获取终端尺寸
+    const terminalSize = xtermOutputRef.value ? 
+      { rows: 24, cols: 80 } : // 从xterm获取实际尺寸
+      { rows: 24, cols: 80 };
+      
+    const newTaskId = store.executeCommand(task.command, terminalSize);
     if (newTaskId) {
       currentTaskId.value = newTaskId; // 选中重新执行的任务
     }

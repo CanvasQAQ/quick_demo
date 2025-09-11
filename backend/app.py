@@ -29,25 +29,38 @@ socketio = SocketIO(app,
                    logger=True,
                    engineio_logger=True)
 
-# 导入并初始化终端处理器
+# 导入并初始化PTY终端处理器
 try:
-    from socketio_handler import TerminalHandler
-    terminal_handler = TerminalHandler(socketio)
-    print("[INFO] Terminal handler initialized successfully")
+    from pty_handler import PtyTerminalHandler
+    pty_terminal_handler = PtyTerminalHandler(socketio)
+    print("[INFO] PTY Terminal handler initialized successfully")
+    terminal_handler = pty_terminal_handler  # 保持向后兼容的变量名
 except ImportError as e:
-    print(f"[ERROR] Failed to import socketio_handler: {e}")
-    terminal_handler = None
+    print(f"[ERROR] Failed to import pty_handler: {e}")
+    # Fallback to old handler
+    try:
+        from socketio_handler import TerminalHandler
+        terminal_handler = TerminalHandler(socketio)
+        print("[INFO] Fallback to old terminal handler")
+    except Exception as e2:
+        print(f"[ERROR] Failed to initialize any terminal handler: {e2}")
+        terminal_handler = None
 except Exception as e:
-    print(f"[ERROR] Failed to initialize terminal handler: {e}")
+    print(f"[ERROR] Failed to initialize PTY terminal handler: {e}")
     terminal_handler = None
 
 @app.route('/health')
 def health_check():
     terminal_status = 'available' if terminal_handler else 'unavailable'
+    terminal_type = 'pty' if hasattr(terminal_handler, 'sessions') and hasattr(list(terminal_handler.sessions.values())[0] if terminal_handler.sessions else type('dummy', (), {}), 'terminals') else 'basic'
     return jsonify({
         'status': 'healthy', 
         'message': 'Flask server is running',
-        'terminal': terminal_status
+        'terminal': {
+            'status': terminal_status,
+            'type': terminal_type,
+            'features': ['pty', 'ansi_colors', 'interactive', 'resize', 'multi_task'] if terminal_type == 'pty' else ['basic', 'multi_task']
+        }
     })
 
 @app.route('/')
