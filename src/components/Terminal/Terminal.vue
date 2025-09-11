@@ -206,6 +206,7 @@
       <CommandInput
         :is-connected="isConnected"
         :is-executing="isExecuting"
+        :running-tasks-count="runningTasksCount"
         :command-history="commandHistory"
         :favorite-commands="favoriteCommands"
         @execute-command="handleExecuteCommand"
@@ -270,6 +271,11 @@ const sessionId = computed(() => store.sessionId);
 const tasks = computed(() => store.tasks);
 const commandHistory = computed(() => store.commandHistory);
 const favoriteCommands = computed(() => store.favoriteCommands);
+
+// 计算运行中任务数量
+const runningTasksCount = computed(() => 
+  tasks.value.filter(task => task.status === 'running').length
+);
 
 const currentTask = computed(() => {
   if (!currentTaskId.value) return undefined;
@@ -373,10 +379,11 @@ const handleDeleteTask = (taskId: string) => {
 };
 
 const handleExecuteCommand = (command: string) => {
-  // 获取终端尺寸 (如果xterm已初始化)
-  const terminalSize = xtermOutputRef.value ? 
-    { rows: 24, cols: 80 } : // 从xterm获取实际尺寸
-    { rows: 24, cols: 80 };
+  // 获取终端尺寸 (从XtermTaskOutput组件)
+  let terminalSize = { rows: 24, cols: 80 }; // 默认尺寸
+  if (xtermOutputRef.value && typeof xtermOutputRef.value.getTerminalSize === 'function') {
+    terminalSize = xtermOutputRef.value.getTerminalSize();
+  }
   
   const taskId = store.executeCommand(command, terminalSize);
   if (taskId) {
@@ -395,10 +402,11 @@ const handleResizeTerminal = (data: { taskId: string; rows: number; cols: number
 const handleReexecuteTask = (taskId: string) => {
   const task = tasks.value.find(t => t.id === taskId);
   if (task) {
-    // 获取终端尺寸
-    const terminalSize = xtermOutputRef.value ? 
-      { rows: 24, cols: 80 } : // 从xterm获取实际尺寸
-      { rows: 24, cols: 80 };
+    // 获取终端尺寸 (从XtermTaskOutput组件)
+    let terminalSize = { rows: 24, cols: 80 }; // 默认尺寸
+    if (xtermOutputRef.value && typeof xtermOutputRef.value.getTerminalSize === 'function') {
+      terminalSize = xtermOutputRef.value.getTerminalSize();
+    }
       
     const newTaskId = store.executeCommand(task.command, terminalSize);
     if (newTaskId) {
@@ -482,15 +490,32 @@ onMounted(() => {
   checkMobile();
   window.addEventListener('resize', checkMobile);
   
-  // 获取可用端口
-  fetchAvailablePorts();
-  
-  // 尝试自动连接本地服务
-  if (!isConnected.value) {
-    setTimeout(() => {
-      toggleConnection();
-    }, 1000);
-  }
+  // 获取可用端口，然后根据结果决定是否自动连接
+  fetchAvailablePorts().then(() => {
+    // 检查是否有活跃的Flask或SSH端口
+    const hasActivePort = availablePorts.value.some(portOption => 
+      (portOption.source === 'flask' || portOption.source === 'ssh') && 
+      portOption.status === 'active'
+    );
+    
+    if (hasActivePort && !isConnected.value) {
+      // 选择第一个活跃的端口进行连接
+      const activePort = availablePorts.value.find(portOption => 
+        (portOption.source === 'flask' || portOption.source === 'ssh') && 
+        portOption.status === 'active'
+      );
+      
+      if (activePort) {
+        port.value = activePort.port;
+        host.value = activePort.host || 'localhost';
+        
+        // 延迟1秒后自动连接
+        setTimeout(() => {
+          toggleConnection();
+        }, 1000);
+      }
+    }
+  });
 });
 
 onUnmounted(() => {

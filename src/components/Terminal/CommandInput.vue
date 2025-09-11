@@ -9,7 +9,7 @@
           placeholder="输入命令并回车执行..."
           size="large"
           clearable
-          :disabled="!isConnected || isExecuting"
+          :disabled="!isConnected"
           @keydown="handleKeyDown"
           @focus="handleInputFocus"
           @blur="handleInputBlur"
@@ -23,8 +23,8 @@
             <el-button
               type="primary"
               @click="executeCommand"
-              :disabled="!currentCommand.trim() || !isConnected || isExecuting"
-              :loading="isExecuting"
+              :disabled="!currentCommand.trim() || !isConnected"
+              :loading="false"
             >
               <!-- <el-icon v-if="!isExecuting"><Position /></el-icon> -->
               执行
@@ -155,7 +155,7 @@
             
             <el-text v-else-if="isExecuting" type="info" size="small">
               <!-- <el-icon class="rotating"><Loading /></el-icon> -->
-              命令执行中...
+              {{ runningTasksCount }}个任务执行中...
             </el-text>
             
             <el-text v-else type="success" size="small">
@@ -216,6 +216,7 @@ interface Props {
   isExecuting: boolean;
   commandHistory: string[];
   favoriteCommands: FavoriteCommand[];
+  runningTasksCount?: number;
 }
 
 interface Emits {
@@ -226,6 +227,9 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+
+// 计算属性
+const runningTasksCount = computed(() => props.runningTasksCount || 0);
 
 // 响应式变量
 const currentCommand = ref('');
@@ -277,7 +281,7 @@ const filteredSuggestions = computed(() => {
 // 方法
 const executeCommand = () => {
   const command = currentCommand.value.trim();
-  if (!command || !props.isConnected || props.isExecuting) return;
+  if (!command || !props.isConnected) return;
   
   emit('execute-command', command);
   currentCommand.value = '';
@@ -419,8 +423,8 @@ const handleGlobalKeyDown = (event: KeyboardEvent) => {
     executeQuickCommand('clear');
   }
   
-  // Ctrl+C 中断
-  if (event.ctrlKey && event.key === 'c' && props.isExecuting) {
+  // Ctrl+C 中断（只有当有运行任务时）
+  if (event.ctrlKey && event.key === 'c' && runningTasksCount.value > 0) {
     event.preventDefault();
     const success = emit('interrupt-command');
     if (success) {

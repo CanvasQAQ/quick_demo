@@ -309,9 +309,15 @@ const initializeTerminal = async () => {
         }
       }
       
-      // Ctrl+A 全选
+      // Ctrl+A 跳转到行首（正常终端行为）
       if (event.ctrlKey && event.code === 'KeyA') {
-        terminal.value?.selectAll();
+        // 发送 Ctrl+A 到终端，让终端自己处理
+        if (props.currentTask && inputMode.value === 'interactive') {
+          emit('send-input', {
+            taskId: props.currentTask.id,
+            data: '\x01'  // Ctrl+A 的ASCII码
+          });
+        }
         return false;
       }
       
@@ -616,7 +622,17 @@ onUnmounted(() => {
 defineExpose({
   writeToTerminal: handleTaskOutput,
   clearTerminal,
-  fitTerminal
+  fitTerminal,
+  // 新增：获取当前终端尺寸的方法
+  getTerminalSize: () => {
+    if (terminal.value) {
+      return {
+        rows: terminal.value.rows,
+        cols: terminal.value.cols
+      };
+    }
+    return { rows: 24, cols: 80 };
+  }
 });
 </script>
 

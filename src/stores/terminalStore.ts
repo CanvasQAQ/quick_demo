@@ -16,7 +16,6 @@ interface TerminalState {
   currentTaskId: string | null;
   commandHistory: string[];
   favoriteCommands: FavoriteCommand[];
-  isExecuting: boolean;
 }
 
 export const useTerminalStore = defineStore('terminal', {
@@ -32,8 +31,7 @@ export const useTerminalStore = defineStore('terminal', {
     tasks: [],
     currentTaskId: null,
     commandHistory: [],
-    favoriteCommands: [],
-    isExecuting: false
+    favoriteCommands: []
   }),
 
   getters: {
@@ -50,6 +48,11 @@ export const useTerminalStore = defineStore('terminal', {
     // 获取最近的命令历史
     recentCommands: (state): string[] => {
       return state.commandHistory.slice(-10);
+    },
+    
+    // 是否有任务正在执行（基于运行中任务计算）
+    isExecuting: (state): boolean => {
+      return state.tasks.some(task => task.status === 'running');
     }
   },
 
@@ -76,7 +79,6 @@ export const useTerminalStore = defineStore('terminal', {
       this.status = null;
       this.sessionId = null;
       this.outputHistory = [];
-      this.isExecuting = false;
       
       // 停止所有运行中的任务
       this.tasks.forEach(task => {
@@ -109,7 +111,6 @@ export const useTerminalStore = defineStore('terminal', {
       // 添加到任务列表
       this.tasks.unshift(task); // 新任务在前面
       this.currentTaskId = task.id;
-      this.isExecuting = true;
 
       // 添加到命令历史
       this.addToCommandHistory(command.trim());
@@ -137,7 +138,6 @@ export const useTerminalStore = defineStore('terminal', {
     clearAllTasks() {
       this.tasks = [];
       this.currentTaskId = null;
-      this.isExecuting = false;
     },
 
     // 添加到命令历史
@@ -192,9 +192,7 @@ export const useTerminalStore = defineStore('terminal', {
           task.output += `\n${message}`;
         }
         
-        // 更新执行状态
-        const stillRunning = this.tasks.some(t => t.status === 'running');
-        this.isExecuting = stillRunning;
+        // isExecuting 现在通过getter自动计算，无需手动更新
       }
     },
 

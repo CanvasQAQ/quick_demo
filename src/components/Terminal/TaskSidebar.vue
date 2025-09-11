@@ -67,37 +67,43 @@
             </span>
           </el-tooltip>
 
-          <!-- 时间标签 -->
-          <el-tag v-if="task.duration" size="small" class="task-duration">
-            {{ formatDuration(task.duration) }}
-          </el-tag>
+          <!-- 时间标签和操作按钮的容器 -->
+          <div class="task-end-content">
+            <!-- 运行时长标签 -->
+            <el-tag v-if="task.duration" size="small" class="task-duration">
+              {{ formatDuration(task.duration) }}
+            </el-tag>
+            <el-tag v-else-if="task.status === 'running'" size="small" type="warning" class="task-duration">
+              运行中
+            </el-tag>
 
-          <!-- 任务操作按钮 -->
-          <div class="task-actions">
-            <!-- 中断按钮 - 仅运行中的任务显示 -->
-            <el-tooltip content="中断任务" placement="top" v-if="task.status === 'running'">
-              <el-button
-                text
-                size="small"
-                type="warning"
-                @click.stop="interruptTask(task.id)"
-                class="task-interrupt-btn"
-              >
-                <el-icon><CircleClose /></el-icon>
-              </el-button>
-            </el-tooltip>
-            
-            <!-- 删除按钮 -->
-            <el-tooltip content="删除任务" placement="top">
-              <el-button
-                text
-                size="small"
-                @click.stop="deleteTask(task.id)"
-                class="task-delete-btn"
-              >
-                <el-icon><Close /></el-icon>
-              </el-button>
-            </el-tooltip>
+            <!-- 任务操作按钮 -->
+            <div class="task-actions">
+              <!-- 中断按钮 - 仅运行中的任务显示 -->
+              <el-tooltip content="中断任务" placement="top" v-if="task.status === 'running'">
+                <el-button
+                  text
+                  size="small"
+                  type="warning"
+                  @click.stop="interruptTask(task.id)"
+                  class="task-interrupt-btn"
+                >
+                  <el-icon><CircleClose /></el-icon>
+                </el-button>
+              </el-tooltip>
+              
+              <!-- 删除按钮 - 非运行中的任务显示 -->
+              <el-tooltip content="删除任务" placement="top" v-if="task.status !== 'running'">
+                <el-button
+                  text
+                  size="small"
+                  @click.stop="deleteTask(task.id)"
+                  class="task-delete-btn"
+                >
+                  <el-icon><Close /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </div>
         </el-menu-item>
       </el-menu>
@@ -204,8 +210,8 @@ const formatDuration = (duration: number): string => {
 
 const getStatusTooltip = (task: Task): string => {
   const statusMap = {
-    running: `执行中 - 已运行${task.duration ? formatDuration(task.duration) : ''}`,
-    success: `执行成功 - 耗时${task.duration ? formatDuration(task.duration) : ''}`,
+    running: '执行中',
+    success: '执行成功',
     error: `执行失败 - 退出码${task.exitCode ?? 'N/A'}`,
     pending: '等待执行'
   };
@@ -312,23 +318,42 @@ const getStatusClass = (status: Task['status']): string => {
   margin-left: auto;
 }
 
+.task-end-content {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  margin-left: auto;
+}
+
 .task-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.2s;
-  margin-left: 4px;
+  background: var(--el-bg-color);
+  border-radius: 4px;
+  padding: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.task-menu-item:hover .task-actions {
+  opacity: 1;
+}
+
+.task-menu-item:hover .task-duration {
+  opacity: 0;
 }
 
 .task-interrupt-btn,
 .task-delete-btn {
   flex-shrink: 0;
   padding: 2px 4px;
-}
-
-.task-menu-item:hover .task-actions {
-  opacity: 1;
+  min-height: 20px;
 }
 
 .empty-state {
