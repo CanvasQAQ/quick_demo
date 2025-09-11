@@ -5,7 +5,7 @@ import os
 import time
 import signal
 from flask_socketio import SocketIO, emit
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
 
 # 配置日志 - Windows 兼容
@@ -19,31 +19,50 @@ class TerminalSession:
     def __init__(self, session_id: str, socketio: SocketIO):
         self.session_id = session_id
         self.socketio = socketio
-        self.process: Optional[subprocess.Popen] = None
-        self.is_running = False
+        self.processes: Dict[str, subprocess.Popen] = {}  # taskId -> process
+        self.running_tasks: Dict[str, bool] = {}  # taskId -> is_running
         logger.debug("Created terminal session: %s", session_id)
     
-    def execute_command(self, command: str):
-        """执行命令并实时输出 - Windows 兼容版本"""
+    def execute_command(self, task_id: str, command: str):
+        """执行命令并实时输出 - 支持多任务"""
         try:
-            logger.debug("Executing command: %s", command)
+            logger.debug("Executing command: %s (task: %s)", command, task_id)
             
-            # Windows 兼容的命令执行
-            self.process = subprocess.Popen(
-                command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=1,
-                universal_newlines=True,
-                # Windows 特定设置
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
-            )
+            # 检查任务是否已存在
+            if task_id in self.processes:
+                logger.warning("Task %s already exists", task_id)
+                return
             
-            self.is_running = True
+            # 跨平台的命令执行，支持更好的中断处理
+            if os.name == 'nt':  # Windows
+                process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    universal_newlines=True,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+            else:  # Unix/Linux
+                process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    universal_newlines=True,
+                    preexec_fn=os.setsid  # 创建新的进程组
+                )
+            
+            self.processes[task_id] = process
+            self.running_tasks[task_id] = True
             
             # 启动输出读取线程
-            output_thread = threading.Thread(target=self._read_output)
+            output_thread = threading.Thread(
+                target=self._read_output, 
+                args=(task_id, command)
+            )
             output_thread.daemon = True
             output_thread.start()
             
@@ -51,125 +70,195 @@ class TerminalSession:
             logger.error("Failed to execute command: %s", e)
             self.socketio.emit('terminal_error', {
                 'sessionId': self.session_id,
+                'taskId': task_id,
                 'error': 'Failed to start command: ' + str(e)
             })
     
-    def _read_output(self):
-        """读取命令输出 - Windows 兼容版本"""
+    def _read_output(self, task_id: str, command: str):
+        """读取命令输出 - 多任务版本"""
         try:
-            logger.debug("Starting output reading for session: %s", self.session_id)
+            logger.debug("Starting output reading for task: %s", task_id)
             
-            if self.process and self.process.stdout:
-                # 逐行读取输出
-                while True:
-                    line = self.process.stdout.readline()
-                    if not line:
-                        if self.process.poll() is not None:
-                            break
-                        time.sleep(0.1)
-                        continue
-                    
-                    logger.debug("Output: %s", line.strip())
-                    # 确保每行输出都包含换行符
-                    output_line = line.rstrip('\r\n') + '\n'
-                    self.socketio.emit('terminal_output', {
-                        'sessionId': self.session_id,
-                        'output': output_line,
-                        'type': 'stdout'
-                    })
+            process = self.processes.get(task_id)
+            if not process or not process.stdout:
+                return
             
+            # 逐行读取输出
+            while True:
+                line = process.stdout.readline()
+                if not line:
+                    if process.poll() is not None:
+                        break
+                    time.sleep(0.1)
+                    continue
+                
+                logger.debug("Output from task %s: %s", task_id, line.strip())
+                # 确保每行输出都包含换行符
+                output_line = line.rstrip('\r\n') + '\n'
+                self.socketio.emit('terminal_output', {
+                    'sessionId': self.session_id,
+                    'taskId': task_id,
+                    'output': output_line,
+                    'type': 'stdout'
+                })
+        
             # 发送完成信号
-            return_code = self.process.poll() if self.process else -1
-            logger.debug("Command completed with return code: %s", return_code)
+            return_code = process.poll() if process else -1
+            logger.debug("Task %s completed with return code: %s", task_id, return_code)
             
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
+                'taskId': task_id,
                 'exitCode': return_code,
                 'message': 'Command execution completed with code ' + str(return_code)
             })
             
             self.socketio.emit('terminal_status', {
                 'sessionId': self.session_id,
+                'taskId': task_id,
                 'status': 'idle'
             })
             
         except Exception as e:
-            logger.error("Error in output reading thread: %s", e)
+            logger.error("Error in output reading thread for task %s: %s", task_id, e)
             self.socketio.emit('terminal_error', {
                 'sessionId': self.session_id,
+                'taskId': task_id,
                 'error': 'Output reading failed: ' + str(e)
             })
         finally:
-            self.is_running = False
-            logger.debug("Output reading thread finished for session: %s", self.session_id)
+            # 清理任务状态
+            self.running_tasks[task_id] = False
+            logger.debug("Output reading thread finished for task: %s", task_id)
     
-    def interrupt_command(self):
-        """中断当前运行的命令"""
-        logger.debug("Interrupting command for session: %s", self.session_id)
-        if self.process and self.process.poll() is None:
-            try:
-                if os.name == 'nt':  # Windows
-                    # Windows使用CTRL_BREAK_EVENT
-                    self.process.send_signal(signal.CTRL_BREAK_EVENT)
-                else:  # Unix/Linux
-                    # Unix/Linux使用SIGINT (Ctrl+C)
-                    self.process.send_signal(signal.SIGINT)
-                    
-                # 等待进程响应中断信号
+    def interrupt_command(self, task_id: str):
+        """中断指定任务"""
+        logger.debug("Interrupting task: %s", task_id)
+        
+        process = self.processes.get(task_id)
+        if not process or process.poll() is not None:
+            logger.debug("No running process for task: %s", task_id)
+            return False
+            
+        try:
+            if os.name == 'nt':  # Windows
+                # Windows: 尝试优雅终止，如果失败则强制终止
                 try:
-                    self.process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    # 如果2秒内没有响应，强制终止
-                    logger.warning("Process didn't respond to interrupt, forcing termination")
-                    self.process.terminate()
+                    process.terminate()
+                    # 等待短时间看是否优雅退出
                     try:
-                        self.process.wait(timeout=1)
+                        process.wait(timeout=2)
                     except subprocess.TimeoutExpired:
-                        self.process.kill()
-                
-                self.socketio.emit('terminal_output', {
-                    'sessionId': self.session_id,
-                    'output': '\n^C\n',
-                    'type': 'system'
-                })
-                
-                self.socketio.emit('terminal_complete', {
-                    'sessionId': self.session_id,
-                    'exitCode': -2,  # 中断退出码
-                    'message': 'Command interrupted by user'
-                })
-                
-                logger.info("Command interrupted successfully for session: %s", self.session_id)
-                return True
-                
-            except Exception as e:
-                logger.error("Failed to interrupt command: %s", e)
-                self.socketio.emit('terminal_error', {
-                    'sessionId': self.session_id,
-                    'error': 'Failed to interrupt command: ' + str(e)
-                })
-                return False
-        else:
-            logger.debug("No running process to interrupt for session: %s", self.session_id)
+                        # 强制杀死进程
+                        process.kill()
+                        process.wait()
+                except Exception as e:
+                    logger.error("Failed to terminate Windows process: %s", e)
+                    return False
+            else:  # Unix/Linux  
+                # Unix/Linux: 发送SIGTERM到整个进程组
+                try:
+                    import signal
+                    # 发送SIGTERM到进程组
+                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    # 等待进程退出
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        # 如果SIGTERM不起作用，发送SIGKILL
+                        logger.warning("SIGTERM timeout, sending SIGKILL to task %s", task_id)
+                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                        process.wait()
+                except ProcessLookupError:
+                    # 进程已经退出
+                    logger.debug("Process already terminated for task: %s", task_id)
+                except Exception as e:
+                    logger.error("Failed to terminate Unix process: %s", e)
+                    return False
+            
+            # 立即更新状态
+            self.running_tasks[task_id] = False
+            
+            # 发送中断通知
+            self.socketio.emit('terminal_output', {
+                'sessionId': self.session_id,
+                'taskId': task_id,
+                'output': '\n^C (interrupted)\n',
+                'type': 'system'
+            })
+            
+            self.socketio.emit('terminal_complete', {
+                'sessionId': self.session_id,
+                'taskId': task_id,
+                'exitCode': -2,  # 中断退出码
+                'message': 'Command interrupted by user'
+            })
+            
+            self.socketio.emit('terminal_status', {
+                'sessionId': self.session_id,
+                'taskId': task_id,
+                'status': 'idle'
+            })
+            
+            logger.info("Task interrupted successfully: %s", task_id)
+            return True
+            
+        except Exception as e:
+            logger.error("Failed to interrupt task %s: %s", task_id, e)
+            self.socketio.emit('terminal_error', {
+                'sessionId': self.session_id,
+                'taskId': task_id,
+                'error': 'Failed to interrupt command: ' + str(e)
+            })
             return False
     
     def cleanup(self):
-        """清理资源 - Windows 兼容版本"""
+        """清理资源 - 支持多任务版本"""
         logger.debug("Cleaning up session: %s", self.session_id)
-        if self.process and self.process.poll() is None:
-            try:
-                # Windows 使用不同的终止方式
-                if os.name == 'nt':  # Windows
-                    self.process.terminate()
-                else:  # Unix/Linux
-                    self.process.terminate()
-                self.process.wait(timeout=2)
-            except:
+        
+        # 清理所有进程
+        for task_id, process in list(self.processes.items()):
+            if process.poll() is None:
                 try:
-                    self.process.kill()
-                except:
-                    pass
-        self.is_running = False
+                    if os.name == 'nt':  # Windows
+                        process.terminate()
+                        try:
+                            process.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                    else:  # Unix/Linux
+                        # 终止整个进程组
+                        try:
+                            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                            process.wait(timeout=2)
+                        except (subprocess.TimeoutExpired, ProcessLookupError):
+                            try:
+                                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                                process.wait()
+                            except ProcessLookupError:
+                                pass  # 进程已经退出
+                except Exception as e:
+                    logger.error("Error cleaning up process for task %s: %s", task_id, e)
+        
+        # 清理状态
+        self.processes.clear()
+        self.running_tasks.clear()
+        
+    def get_running_tasks(self) -> List[str]:
+        """获取正在运行的任务列表"""
+        return [task_id for task_id, is_running in self.running_tasks.items() if is_running]
+    
+    def get_task_status(self, task_id: str) -> str:
+        """获取任务状态"""
+        if task_id not in self.processes:
+            return 'not_found'
+        
+        process = self.processes[task_id]
+        if process.poll() is None:
+            return 'running'
+        else:
+            return 'completed'
 
 class TerminalHandler:
     def __init__(self, socketio: SocketIO):
@@ -207,6 +296,7 @@ class TerminalHandler:
         def handle_command(data):
             logger.debug("Received terminal_command event: %s", data)
             session_id = data.get('sessionId')
+            task_id = data.get('taskId')  # 新增taskId字段
             command = data.get('command')
             
             if not session_id or session_id not in self.sessions:
@@ -214,6 +304,17 @@ class TerminalHandler:
                 logger.error(error_msg)
                 emit('terminal_error', {
                     'sessionId': session_id or 'unknown',
+                    'taskId': task_id,
+                    'error': error_msg
+                })
+                return
+            
+            if not task_id:
+                error_msg = 'Task ID is required'
+                logger.error(error_msg)
+                emit('terminal_error', {
+                    'sessionId': session_id,
+                    'taskId': task_id,
                     'error': error_msg
                 })
                 return
@@ -223,25 +324,29 @@ class TerminalHandler:
                 logger.error(error_msg)
                 emit('terminal_error', {
                     'sessionId': session_id,
+                    'taskId': task_id,
                     'error': error_msg
                 })
                 return
             
             session = self.sessions[session_id]
             
-            if session.is_running:
-                error_msg = 'Another command is already running'
+            # 检查任务是否已存在
+            if task_id in session.processes:
+                error_msg = 'Task already exists'
                 logger.error(error_msg)
                 emit('terminal_error', {
                     'sessionId': session_id,
+                    'taskId': task_id,
                     'error': error_msg
                 })
                 return
             
             # 发送执行状态
-            logger.debug("Starting command execution: %s", command)
+            logger.debug("Starting command execution: %s (task: %s)", command, task_id)
             emit('terminal_status', {
                 'sessionId': session_id,
+                'taskId': task_id,
                 'status': 'executing',
                 'command': command
             })
@@ -249,7 +354,7 @@ class TerminalHandler:
             # 在新线程中执行命令
             thread = threading.Thread(
                 target=session.execute_command,
-                args=(command.strip(),)
+                args=(task_id, command.strip())
             )
             thread.daemon = True
             thread.start()
@@ -258,38 +363,59 @@ class TerminalHandler:
         def handle_interrupt(data):
             logger.debug("Received terminal_interrupt event: %s", data)
             session_id = data.get('sessionId')
+            task_id = data.get('taskId')  # 新增taskId字段
             
             if not session_id or session_id not in self.sessions:
                 error_msg = 'Session not found: ' + (session_id or 'unknown')
                 logger.error(error_msg)
                 emit('terminal_error', {
                     'sessionId': session_id or 'unknown',
+                    'taskId': task_id,
+                    'error': error_msg
+                })
+                return
+            
+            if not task_id:
+                error_msg = 'Task ID is required for interrupt'
+                logger.error(error_msg)
+                emit('terminal_error', {
+                    'sessionId': session_id,
+                    'taskId': task_id,
                     'error': error_msg
                 })
                 return
             
             session = self.sessions[session_id]
             
-            if not session.is_running:
-                logger.debug("No running command to interrupt for session: %s", session_id)
+            # 检查任务是否存在和正在运行
+            if task_id not in session.processes:
+                logger.debug("Task not found for interrupt: %s", task_id)
                 emit('terminal_output', {
                     'sessionId': session_id,
+                    'taskId': task_id,
+                    'output': 'Task not found.\n',
+                    'type': 'system'
+                })
+                return
+            
+            if not session.running_tasks.get(task_id, False):
+                logger.debug("No running task to interrupt: %s", task_id)
+                emit('terminal_output', {
+                    'sessionId': session_id,
+                    'taskId': task_id,
                     'output': 'No running command to interrupt.\n',
                     'type': 'system'
                 })
                 return
             
-            # 中断命令
-            success = session.interrupt_command()
+            # 中断指定任务
+            success = session.interrupt_command(task_id)
             if success:
-                emit('terminal_output', {
-                    'sessionId': session_id,
-                    'output': 'Command interrupted.\n',
-                    'type': 'system'
-                })
+                logger.info("Task interrupt initiated: %s", task_id)
             else:
                 emit('terminal_error', {
                     'sessionId': session_id,
+                    'taskId': task_id,
                     'error': 'Failed to interrupt command'
                 })
         

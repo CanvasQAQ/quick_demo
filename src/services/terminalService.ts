@@ -15,10 +15,10 @@ class TerminalService {
   private socket: Socket | null = null;
   private sessionId: string | null = null;
   private connectResolve: ((result: ConnectionResult) => void) | null = null;
-  private outputCallbacks: Array<(output: string) => void> = [];
-  private errorCallbacks: Array<(error: string) => void> = [];
-  private statusCallbacks: Array<(status: string, command?: string) => void> = [];
-  private completeCallbacks: Array<(exitCode: number, message?: string) => void> = [];
+  private outputCallbacks: Array<(output: string, taskId?: string) => void> = [];
+  private errorCallbacks: Array<(error: string, taskId?: string) => void> = [];
+  private statusCallbacks: Array<(status: string, command?: string, taskId?: string) => void> = [];
+  private completeCallbacks: Array<(exitCode: number, message?: string, taskId?: string) => void> = [];
   // 连接到后端
   async connect(config: TerminalConfig): Promise<ConnectionResult> {
     return new Promise((resolve) => {
@@ -118,20 +118,20 @@ class TerminalService {
 
 
   // 执行命令
-  async executeCommand(command: string): Promise<boolean> {
+  async executeCommand(command: string, taskId: string): Promise<boolean> {
     if (!this.socket || !this.sessionId) {
       console.error('Not connected to terminal');
       return false;
     }
 
     return new Promise((resolve) => {
-      console.log('Executing command:', command);
+      console.log('Executing command:', command, 'Task ID:', taskId);
 
       // 监听命令完成事件
       const completeHandler = (data: any) => {
-        if (data && data.sessionId === this.sessionId) {
+        if (data && data.sessionId === this.sessionId && data.taskId === taskId) {
           this.socket?.off('terminal_complete', completeHandler);
-          console.log('Command execution completed');
+          console.log('Command execution completed for task:', taskId);
           resolve(true);
         }
       };
@@ -141,28 +141,30 @@ class TerminalService {
       // 发送命令
       this.socket?.emit('terminal_command', {
         sessionId: this.sessionId,
+        taskId: taskId,
         command: command.trim()
       });
 
       // 设置命令执行超时
       setTimeout(() => {
         this.socket?.off('terminal_complete', completeHandler);
-        console.warn('Command execution timeout');
+        console.warn('Command execution timeout for task:', taskId);
         resolve(false);
       }, 30000);
     });
   }
 
-  // 中断当前命令
-  interruptCommand(): boolean {
+  // 中断指定任务
+  interruptCommand(taskId: string): boolean {
     if (!this.socket || !this.sessionId) {
       console.error('Not connected to terminal');
       return false;
     }
 
-    console.log('Sending interrupt signal');
+    console.log('Sending interrupt signal for task:', taskId);
     this.socket.emit('terminal_interrupt', {
-      sessionId: this.sessionId
+      sessionId: this.sessionId,
+      taskId: taskId
     });
     
     return true;
@@ -195,53 +197,53 @@ class TerminalService {
     console.log('Terminal service disconnected');
   }
   // 添加输出监听器
-  onOutput(callback: (output: string) => void): void {
+  onOutput(callback: (output: string, taskId?: string) => void): void {
     this.outputCallbacks.push(callback);
   }
 
   // 添加错误监听器
-  onError(callback: (error: string) => void): void {
+  onError(callback: (error: string, taskId?: string) => void): void {
     this.errorCallbacks.push(callback);
   }
 
   // 移除监听器
-  offOutput(callback: (output: string) => void): void {
+  offOutput(callback: (output: string, taskId?: string) => void): void {
     this.outputCallbacks = this.outputCallbacks.filter(cb => cb !== callback);
   }
 
-  offError(callback: (error: string) => void): void {
+  offError(callback: (error: string, taskId?: string) => void): void {
     this.errorCallbacks = this.errorCallbacks.filter(cb => cb !== callback);
   }
 
   // 触发输出回调
-  private triggerOutput(output: string): void {
-    this.outputCallbacks.forEach(callback => callback(output));
+  private triggerOutput(output: string, taskId?: string): void {
+    this.outputCallbacks.forEach(callback => callback(output, taskId));
   }
 
   // 触发错误回调
-  private triggerError(error: string): void {
-    this.errorCallbacks.forEach(callback => callback(error));
+  private triggerError(error: string, taskId?: string): void {
+    this.errorCallbacks.forEach(callback => callback(error, taskId));
   }
 
   // 清理所有监听器
   // 添加状态监听器
-  onStatus(callback: (status: string, command?: string) => void): void {
+  onStatus(callback: (status: string, command?: string, taskId?: string) => void): void {
     this.statusCallbacks.push(callback);
   }
 
   // 添加完成监听器
-  onComplete(callback: (exitCode: number, message?: string) => void): void {
+  onComplete(callback: (exitCode: number, message?: string, taskId?: string) => void): void {
     this.completeCallbacks.push(callback);
   }
 
   // 触发状态回调
-  private triggerStatus(status: string, command?: string): void {
-    this.statusCallbacks.forEach(callback => callback(status, command));
+  private triggerStatus(status: string, command?: string, taskId?: string): void {
+    this.statusCallbacks.forEach(callback => callback(status, command, taskId));
   }
 
   // 触发完成回调
-  private triggerComplete(exitCode: number, message?: string): void {
-    this.completeCallbacks.forEach(callback => callback(exitCode, message));
+  private triggerComplete(exitCode: number, message?: string, taskId?: string): void {
+    this.completeCallbacks.forEach(callback => callback(exitCode, message, taskId));
   }
 
   // 修改 setupEventListeners 来使用所有回调
@@ -251,32 +253,32 @@ class TerminalService {
     // 监听终端输出
     this.socket.on('terminal_output', (data: any) => {
       if (data && data.sessionId === this.sessionId && data.output) {
-        console.log('Terminal output:', data.output);
-        this.triggerOutput(data.output);
+        console.log('Terminal output for task:', data.taskId, data.output.slice(0, 50) + '...');
+        this.triggerOutput(data.output, data.taskId);
       }
     });
 
     // 监听终端错误
     this.socket.on('terminal_error', (data: any) => {
       if (data && data.sessionId === this.sessionId && data.error) {
-        console.error('Terminal error:', data.error);
-        this.triggerError(data.error);
+        console.error('Terminal error for task:', data.taskId, data.error);
+        this.triggerError(data.error, data.taskId);
       }
     });
 
     // 监听终端状态
     this.socket.on('terminal_status', (data: any) => {
       if (data && data.sessionId === this.sessionId) {
-        console.log('Terminal status:', data.status, data.command);
-        this.triggerStatus(data.status, data.command);
+        console.log('Terminal status for task:', data.taskId, data.status, data.command);
+        this.triggerStatus(data.status, data.command, data.taskId);
       }
     });
 
     // 监听命令完成
     this.socket.on('terminal_complete', (data: any) => {
       if (data && data.sessionId === this.sessionId) {
-        console.log('Command completed with exit code:', data.exitCode, data.message);
-        this.triggerComplete(data.exitCode, data.message);
+        console.log('Command completed for task:', data.taskId, 'exit code:', data.exitCode, data.message);
+        this.triggerComplete(data.exitCode, data.message, data.taskId);
       }
     });
   }

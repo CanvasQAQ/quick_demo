@@ -72,15 +72,33 @@
             {{ formatDuration(task.duration) }}
           </el-tag>
 
-          <!-- 删除按钮 -->
-          <el-button
-            text
-            size="small"
-            @click.stop="deleteTask(task.id)"
-            class="task-delete-btn"
-          >
-            <el-icon><Close /></el-icon>
-          </el-button>
+          <!-- 任务操作按钮 -->
+          <div class="task-actions">
+            <!-- 中断按钮 - 仅运行中的任务显示 -->
+            <el-tooltip content="中断任务" placement="top" v-if="task.status === 'running'">
+              <el-button
+                text
+                size="small"
+                type="warning"
+                @click.stop="interruptTask(task.id)"
+                class="task-interrupt-btn"
+              >
+                <el-icon><CircleClose /></el-icon>
+              </el-button>
+            </el-tooltip>
+            
+            <!-- 删除按钮 -->
+            <el-tooltip content="删除任务" placement="top">
+              <el-button
+                text
+                size="small"
+                @click.stop="deleteTask(task.id)"
+                class="task-delete-btn"
+              >
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </el-tooltip>
+          </div>
         </el-menu-item>
       </el-menu>
 
@@ -104,6 +122,7 @@ import {
   Loading,
   SuccessFilled,
   CircleCloseFilled,
+  CircleClose,
   Clock,
   Close
 } from '@element-plus/icons-vue';
@@ -116,6 +135,7 @@ interface Props {
 interface Emits {
   (e: 'select-task', taskId: string): void;
   (e: 'delete-task', taskId: string): void;
+  (e: 'interrupt-task', taskId: string): void;
   (e: 'clear-all-tasks'): void;
   (e: 'refresh-tasks'): void;
 }
@@ -154,6 +174,10 @@ const handleTaskSelect = (taskId: string) => {
 
 const deleteTask = (taskId: string) => {
   emit('delete-task', taskId);
+};
+
+const interruptTask = (taskId: string) => {
+  emit('interrupt-task', taskId);
 };
 
 const clearAllTasks = () => {
@@ -288,14 +312,22 @@ const getStatusClass = (status: Task['status']): string => {
   margin-left: auto;
 }
 
-.task-delete-btn {
+.task-actions {
+  display: flex;
+  gap: 4px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.2s;
   margin-left: 4px;
 }
 
-.task-menu-item:hover .task-delete-btn {
+.task-interrupt-btn,
+.task-delete-btn {
+  flex-shrink: 0;
+  padding: 2px 4px;
+}
+
+.task-menu-item:hover .task-actions {
   opacity: 1;
 }
 

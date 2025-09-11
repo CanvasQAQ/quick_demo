@@ -114,8 +114,8 @@ export const useTerminalStore = defineStore('terminal', {
       // 添加到命令历史
       this.addToCommandHistory(command.trim());
 
-      // 执行命令
-      terminalService.executeCommand(command.trim());
+      // 执行命令，传递taskId
+      terminalService.executeCommand(command.trim(), task.id);
       
       return task.id;
     },
@@ -200,11 +200,19 @@ export const useTerminalStore = defineStore('terminal', {
 
     // 设置事件监听器
     setupEventListeners() {
-      terminalService.onOutput((output: string) => {
-        // 查找当前运行中的任务
-        const runningTask = this.tasks.find(task => task.status === 'running');
-        if (runningTask) {
-          runningTask.output += output;
+      terminalService.onOutput((output: string, taskId?: string) => {
+        if (taskId) {
+          // 多任务模式：根据taskId更新对应任务
+          const task = this.tasks.find(t => t.id === taskId);
+          if (task) {
+            task.output += output;
+          }
+        } else {
+          // 兼容模式：查找当前运行中的任务
+          const runningTask = this.tasks.find(task => task.status === 'running');
+          if (runningTask) {
+            runningTask.output += output;
+          }
         }
         
         // 保持兼容性，也添加到原有的输出历史
@@ -215,38 +223,56 @@ export const useTerminalStore = defineStore('terminal', {
         });
       });
 
-      terminalService.onStatus((status) => {
+      terminalService.onStatus((status: string, command?: string, taskId?: string) => {
         this.status = status;
-        // 这里可以根据状态更新任务状态
+        
+        if (taskId) {
+          // 多任务模式：更新特定任务状态
+          const task = this.tasks.find(t => t.id === taskId);
+          if (task && status === 'executing') {
+            // 确保任务状态为运行中
+            task.status = 'running';
+          }
+        }
       });
 
-      terminalService.onComplete((data) => {
-        // 完成当前运行的任务
-        const runningTask = this.tasks.find(task => task.status === 'running');
-        if (runningTask) {
-          this.completeTask(runningTask.id, data.exitCode || 0, data.message);
+      terminalService.onComplete((exitCode: number, message?: string, taskId?: string) => {
+        if (taskId) {
+          // 多任务模式：完成指定任务
+          this.completeTask(taskId, exitCode, message);
+        } else {
+          // 兼容模式：完成当前运行的任务
+          const runningTask = this.tasks.find(task => task.status === 'running');
+          if (runningTask) {
+            this.completeTask(runningTask.id, exitCode, message);
+          }
         }
         
         // 保持兼容性
         this.outputHistory.push({
-          output: data.message || '',
+          output: message || '',
           type: 'system',
-          sessionId: data.sessionId
+          sessionId: this.sessionId || ''
         });
       });
 
-      terminalService.onError((error) => {
-        // 标记当前运行任务为失败
-        const runningTask = this.tasks.find(task => task.status === 'running');
-        if (runningTask) {
-          this.completeTask(runningTask.id, 1, `Error: ${error.error}`);
+      terminalService.onError((error: string, taskId?: string) => {
+        if (taskId) {
+          // 多任务模式：标记指定任务为失败
+          this.completeTask(taskId, 1, `Error: ${error}`);
+        } else {
+          // 兼容模式：标记当前运行任务为失败
+          const runningTask = this.tasks.find(task => task.status === 'running');
+          if (runningTask) {
+            this.completeTask(runningTask.id, 1, `Error: ${error}`);
+          }
         }
         
         // 保持兼容性
         this.outputHistory.push({
-          output: `Error: ${error.error}`,
+          output: `Error: ${error}`,
           type: 'error',
-          sessionId: error.sessionId
+          sessionId: this.sessionId || ''
         });
       });
     },
@@ -256,28 +282,32 @@ export const useTerminalStore = defineStore('terminal', {
       this.connectionError = null;
     },
 
-    // 中断当前执行的命令
-    interruptCurrentCommand(): boolean {
-      if (!this.isConnected || !this.isExecuting) {
+    // 中断指定任务
+    interruptTask(taskId: string): boolean {
+      if (!this.isConnected) {
         return false;
       }
 
-      const success = terminalService.interruptCommand();
+      const task = this.tasks.find(t => t.id === taskId);
+      if (!task || task.status !== 'running') {
+        return false;
+      }
+
+      const success = terminalService.interruptCommand(taskId);
       if (success) {
-        // 将正在运行的任务标记为中断
-        const runningTasks = this.tasks.filter(task => task.status === 'running');
-        runningTasks.forEach(task => {
-          task.status = 'error';
-          task.endTime = new Date();
-          task.exitCode = -2; // 中断退出码
-          task.duration = (task.endTime.getTime() - task.startTime.getTime()) / 1000;
-          task.output += '\n[命令已中断]';
-        });
-        
-        this.isExecuting = false;
+        // 标记任务为中断状态 - 实际状态更新会通过事件监听器处理
+        console.log(`Interrupt signal sent for task: ${taskId}`);
       }
       
       return success;
+    },
+
+    // 中断当前选中的任务（保持向后兼容）
+    interruptCurrentCommand(): boolean {
+      if (!this.currentTaskId) {
+        return false;
+      }
+      return this.interruptTask(this.currentTaskId);
     },
 
     // 清除输出历史（保持兼容性）

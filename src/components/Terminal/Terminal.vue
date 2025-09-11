@@ -142,6 +142,7 @@
           :active-task-id="currentTaskId"
           @select-task="handleTaskSelect"
           @delete-task="handleDeleteTask"
+          @interrupt-task="handleInterruptTask"
           @clear-all-tasks="clearAllTasks"
           @refresh-tasks="refreshTasks"
         />
@@ -161,6 +162,7 @@
           :active-task-id="currentTaskId"
           @select-task="handleMobileTaskSelect"
           @delete-task="handleDeleteTask"
+          @interrupt-task="handleInterruptTask"
           @clear-all-tasks="clearAllTasks"
           @refresh-tasks="refreshTasks"
         />
@@ -390,6 +392,15 @@ const handleAddToFavorites = (command: string) => {
     category: 'user'
   });
   ElMessage.success('已添加到收藏');
+};
+
+const handleInterruptTask = (taskId: string) => {
+  const success = store.interruptTask(taskId);
+  if (success) {
+    ElMessage.success('任务中断信号已发送');
+  } else {
+    ElMessage.warning('无法中断该任务');
+  }
 };
 
 const handleInterruptCommand = (): boolean => {
