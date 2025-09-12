@@ -19,6 +19,11 @@ class TerminalService {
   private errorCallbacks: Array<(error: string, taskId?: string) => void> = [];
   private statusCallbacks: Array<(status: string, command?: string, taskId?: string) => void> = [];
   private completeCallbacks: Array<(exitCode: number, message?: string, taskId?: string) => void> = [];
+  
+  // 输入缓冲和节流相关属性
+  private inputBuffer: Map<string, { buffer: string; timer: NodeJS.Timeout | null }> = new Map();
+  private inputThrottleDelay: number = 50; // 50ms节流延迟
+  private maxBufferSize: number = 100; // 最大缓冲大小
   // 连接到后端
   async connect(config: TerminalConfig): Promise<ConnectionResult> {
     return new Promise((resolve) => {
@@ -156,21 +161,99 @@ class TerminalService {
     });
   }
 
-  // 向终端发送输入 (PTY交互)
+  // 向终端发送输入 (PTY交互) - 带缓冲和节流
   sendInput(taskId: string, data: string): boolean {
     if (!this.socket || !this.sessionId) {
       console.error('Not connected to terminal');
       return false;
     }
 
-    console.log('Sending input to terminal:', taskId, data);
-    this.socket.emit('terminal_input', {
-      sessionId: this.sessionId,
-      taskId: taskId,
-      data: data
-    });
+    // 获取或创建该任务的缓冲区
+    let bufferInfo = this.inputBuffer.get(taskId);
+    if (!bufferInfo) {
+      bufferInfo = { buffer: '', timer: null };
+      this.inputBuffer.set(taskId, bufferInfo);
+    }
+
+    // 将数据添加到缓冲区
+    bufferInfo.buffer += data;
+
+    // 如果缓冲区过大，立即发送
+    if (bufferInfo.buffer.length > this.maxBufferSize) {
+      this.flushInputBuffer(taskId);
+      return true;
+    }
+
+    // 清除之前的定时器
+    if (bufferInfo.timer) {
+      clearTimeout(bufferInfo.timer);
+    }
+
+    // 设置新的定时器，延迟发送
+    bufferInfo.timer = setTimeout(() => {
+      this.flushInputBuffer(taskId);
+    }, this.inputThrottleDelay);
     
     return true;
+  }
+
+  // 刷新输入缓冲区，实际发送数据
+  private flushInputBuffer(taskId: string): void {
+    const bufferInfo = this.inputBuffer.get(taskId);
+    if (!bufferInfo || !bufferInfo.buffer) {
+      return;
+    }
+
+    if (!this.socket || !this.sessionId) {
+      console.error('Not connected to terminal');
+      return;
+    }
+
+    const dataToSend = bufferInfo.buffer;
+    bufferInfo.buffer = '';
+    
+    if (bufferInfo.timer) {
+      clearTimeout(bufferInfo.timer);
+      bufferInfo.timer = null;
+    }
+
+    console.log('Sending buffered input to terminal:', taskId, 'length:', dataToSend.length);
+    
+    // 发送数据，添加错误处理
+    try {
+      this.socket.emit('terminal_input', {
+        sessionId: this.sessionId,
+        taskId: taskId,
+        data: dataToSend
+      });
+    } catch (error) {
+      console.error('Error sending input to terminal:', error);
+      // 重新添加到缓冲区，但只保留最近的数据避免无限循环
+      if (bufferInfo.buffer.length < this.maxBufferSize) {
+        bufferInfo.buffer = dataToSend + bufferInfo.buffer;
+      }
+    }
+  }
+
+  // 立即发送输入（用于特殊情况，如中断信号）
+  sendInputImmediate(taskId: string, data: string): boolean {
+    if (!this.socket || !this.sessionId) {
+      console.error('Not connected to terminal');
+      return false;
+    }
+
+    console.log('Sending immediate input to terminal:', taskId, data);
+    try {
+      this.socket.emit('terminal_input', {
+        sessionId: this.sessionId,
+        taskId: taskId,
+        data: data
+      });
+      return true;
+    } catch (error) {
+      console.error('Error sending immediate input:', error);
+      return false;
+    }
   }
 
   // 调整终端尺寸
@@ -226,12 +309,58 @@ class TerminalService {
       });
     }
     
+    // 清理所有输入缓冲区
+    this.clearAllInputBuffers();
+    
     this.socket?.disconnect();
     this.socket = null;
     this.sessionId = null;
     this.connectResolve = null;
     
     console.log('Terminal service disconnected');
+  }
+
+  // 清理指定任务的输入缓冲区
+  clearInputBuffer(taskId: string): void {
+    const bufferInfo = this.inputBuffer.get(taskId);
+    if (bufferInfo) {
+      if (bufferInfo.timer) {
+        clearTimeout(bufferInfo.timer);
+      }
+      this.inputBuffer.delete(taskId);
+    }
+  }
+
+  // 设置输入节流延迟（毫秒）
+  setInputThrottleDelay(delay: number): void {
+    this.inputThrottleDelay = Math.max(10, Math.min(1000, delay)); // 限制在10-1000ms之间
+    console.log('Input throttle delay set to:', this.inputThrottleDelay, 'ms');
+  }
+
+  // 获取当前输入节流延迟
+  getInputThrottleDelay(): number {
+    return this.inputThrottleDelay;
+  }
+
+  // 设置最大缓冲区大小
+  setMaxBufferSize(size: number): void {
+    this.maxBufferSize = Math.max(10, Math.min(1000, size)); // 限制在10-1000字符之间
+    console.log('Max buffer size set to:', this.maxBufferSize);
+  }
+
+  // 获取最大缓冲区大小
+  getMaxBufferSize(): number {
+    return this.maxBufferSize;
+  }
+
+  // 清理所有输入缓冲区
+  private clearAllInputBuffers(): void {
+    for (const [taskId, bufferInfo] of this.inputBuffer) {
+      if (bufferInfo.timer) {
+        clearTimeout(bufferInfo.timer);
+      }
+    }
+    this.inputBuffer.clear();
   }
   // 添加输出监听器
   onOutput(callback: (output: string, taskId?: string) => void): void {

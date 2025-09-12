@@ -1,68 +1,77 @@
 <template>
   <div class="xterm-task-output">
-    <!-- 任务头部信息 -->
+    <!-- 任务头部信息 - 紧凑设计 -->
     <div class="task-header" v-if="currentTask">
-      <el-row justify="space-between" align="middle">
-        <el-col :span="16">
-          <el-space>
-            <!-- 状态图标 -->
-            <el-icon class="task-status-icon" :class="getStatusClass(currentTask.status)">
-              <Loading v-if="currentTask.status === 'running'" />
-              <SuccessFilled v-else-if="currentTask.status === 'success'" />
-              <CircleCloseFilled v-else-if="currentTask.status === 'error'" />
-              <Clock v-else />
-            </el-icon>
-            
-            <!-- 命令信息 -->
-            <div class="task-info">
-              <el-text class="command-text">{{ currentTask.command }}</el-text>
-              <div class="task-meta">
-                <el-text size="small" type="info">
-                  {{ formatTime(currentTask.startTime) }}
-                  <span v-if="currentTask.duration"> • 耗时 {{ formatDuration(currentTask.duration) }}</span>
-                  <span v-if="currentTask.exitCode !== undefined"> • 退出码 {{ currentTask.exitCode }}</span>
-                </el-text>
-              </div>
+      <div class="task-header-content">
+        <!-- 左侧：状态图标和命令 -->
+        <div class="task-main-info">
+          <el-icon class="task-status-icon" :class="getStatusClass(currentTask.status)">
+            <Loading v-if="currentTask.status === 'running'" />
+            <SuccessFilled v-else-if="currentTask.status === 'success'" />
+            <CircleCloseFilled v-else-if="currentTask.status === 'error'" />
+            <Clock v-else />
+          </el-icon>
+          
+          <!-- 命令显示区域 -->
+          <div class="command-display">
+            <div class="command-line" :class="{ 'expanded': isCommandExpanded }">
+              <span class="command-text">{{ currentTask.command }}</span>
             </div>
-          </el-space>
-        </el-col>
+          </div>
+        </div>
         
-        <el-col :span="8" class="text-right">
-          <el-space>
-            <!-- 终端控制按钮 -->
-            <el-button-group size="small">
-              <el-button 
-                v-if="currentTask.status === 'running'"
-                type="warning" 
-                @click="handleInterrupt"
-                :loading="isInterrupting"
-              >
-                <el-icon><CircleClose /></el-icon>
-                中断
-              </el-button>
-              
-              <el-button 
-                v-else
-                type="primary" 
-                @click="handleReexecute"
-              >
-                <el-icon><Refresh /></el-icon>
-                重新执行
-              </el-button>
-              
-              <el-button @click="handleClear">
-                <el-icon><Delete /></el-icon>
-                清屏
-              </el-button>
-              
-              <el-button @click="toggleFitMode">
-                <el-icon><FullScreen /></el-icon>
-                {{ fitMode ? '固定' : '适应' }}
-              </el-button>
-            </el-button-group>
-          </el-space>
-        </el-col>
-      </el-row>
+        <!-- 右侧：操作按钮 -->
+        <div class="task-actions">
+          <!-- 展开/收起命令按钮 -->
+          <el-button
+            v-if="isCommandTruncated"
+            text
+            size="small"
+            @click="toggleCommandExpanded"
+            class="expand-btn"
+          >
+            <el-icon><ArrowDown v-if="!isCommandExpanded" /><ArrowUp v-else /></el-icon>
+          </el-button>
+          
+          <!-- 复制命令按钮 -->
+          <el-button
+            text
+            size="small"
+            @click="copyCommand"
+            class="copy-btn"
+          >
+            <el-icon><CopyDocument /></el-icon>
+          </el-button>
+          
+          <!-- 任务控制按钮 -->
+          <el-button-group size="small">
+            <el-button 
+              v-if="currentTask.status === 'running'"
+              type="warning" 
+              @click="handleInterrupt"
+              :loading="isInterrupting"
+            >
+              <el-icon><CircleClose /></el-icon>
+            </el-button>
+            
+            <el-button 
+              v-else
+              type="primary" 
+              @click="handleReexecute"
+            >
+              <el-icon><Refresh /></el-icon>
+            </el-button>
+            
+            <el-button @click="handleClear">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+            
+            <el-button @click="toggleFitMode">
+              <el-icon><FullScreen /></el-icon>
+            </el-button>
+          </el-button-group>
+        </div>
+      </div>
     </div>
     
     <!-- Xterm.js 终端容器 -->
@@ -93,36 +102,39 @@
       </div>
     </div>
     
-    <!-- 终端状态栏 -->
-    <div class="terminal-status-bar" v-if="currentTask">
-      <el-row justify="space-between" align="middle">
-        <el-col :span="12">
-          <el-space size="small">
-            <el-tag :type="getStatusTagType(currentTask.status)" size="small">
-              {{ getStatusText(currentTask.status) }}
-            </el-tag>
-            <el-text size="small" type="info">
-              {{ terminalSize.cols }}x{{ terminalSize.rows }}
-            </el-text>
-            <el-text size="small" type="info" v-if="currentTask.id">
-              ID: {{ currentTask.id.slice(0, 8) }}
-            </el-text>
-          </el-space>
-        </el-col>
-        <el-col :span="12" class="text-right">
-          <el-space size="small">
-            <el-text size="small" type="info">
-              输入模式: {{ inputMode === 'command' ? '命令' : '交互' }}
-            </el-text>
+    <!-- 终端状态栏/Footer -->
+    <div class="terminal-footer" v-if="currentTask">
+      <div class="footer-content">
+        <!-- 左侧：任务状态和尺寸信息 -->
+        <div class="footer-left">
+          <el-tag :type="getStatusTagType(currentTask.status)" size="small">
+            {{ getStatusText(currentTask.status) }}
+          </el-tag>
+          <span class="terminal-size-info">{{ terminalSize.cols }}×{{ terminalSize.rows }}</span>
+          <span class="task-id-info">ID: {{ currentTask.id.slice(0, 8) }}</span>
+        </div>
+        
+        <!-- 右侧：时间、耗时、退出码信息 -->
+        <div class="footer-right">
+          <span class="time-info">{{ formatTime(currentTask.startTime) }}</span>
+          <span v-if="currentTask.duration" class="duration-info">
+            耗时 {{ formatDuration(currentTask.duration) }}
+          </span>
+          <span v-if="currentTask.exitCode !== undefined" class="exit-code-info">
+            退出码 {{ currentTask.exitCode }}
+          </span>
+          <!-- 输入模式切换 -->
+          <div class="input-mode-switch">
+            <span class="mode-label">{{ inputMode === 'command' ? '命令' : '交互' }}</span>
             <el-switch 
               v-model="inputMode"
               active-value="interactive"
               inactive-value="command"
               size="small"
             />
-          </el-space>
-        </el-col>
-      </el-row>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -144,7 +156,10 @@ import {
   Refresh,
   Delete,
   FullScreen,
-  Monitor
+  Monitor,
+  ArrowDown,
+  ArrowUp,
+  CopyDocument
 } from '@element-plus/icons-vue';
 
 // 引入xterm.js样式
@@ -178,6 +193,10 @@ const isInterrupting = ref(false);
 const fitMode = ref(true);
 const inputMode = ref<'command' | 'interactive'>('interactive');
 
+// 命令展开相关
+const isCommandExpanded = ref(false);
+const commandLineRef = ref<HTMLElement>();
+
 // 终端尺寸
 const terminalSize = ref({
   rows: 24,
@@ -189,6 +208,12 @@ const terminalStyle = computed(() => ({
   width: fitMode.value ? '100%' : 'auto',
   height: fitMode.value ? '100%' : 'auto'
 }));
+
+// 判断命令是否需要截断
+const isCommandTruncated = computed(() => {
+  if (!props.currentTask?.command) return false;
+  return props.currentTask.command.length > 80; // 超过80字符就显示展开按钮
+});
 
 // 方法
 const initializeTerminal = async () => {
@@ -241,7 +266,10 @@ const initializeTerminal = async () => {
       // 重要：确保ANSI转义序列被正确处理
       windowsMode: false,
       fastScrollModifier: 'ctrl',
-      fastScrollSensitivity: 5
+      fastScrollSensitivity: 5,
+      // 启用真彩色支持
+      allowUnicodeVersion11: true,
+      logLevel: 'debug'
     });
     
     // 添加插件
@@ -372,6 +400,34 @@ const initializeTerminal = async () => {
         menu.appendChild(copyItem);
       }
       
+      // 粘贴选项
+      const pasteItem = document.createElement('div');
+      pasteItem.className = 'menu-item';
+      pasteItem.textContent = '粘贴';
+      pasteItem.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        user-select: none;
+      `;
+      pasteItem.onmouseover = () => pasteItem.style.background = 'var(--el-fill-color-light)';
+      pasteItem.onmouseout = () => pasteItem.style.background = 'transparent';
+      pasteItem.onclick = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text && props.currentTask && inputMode.value === 'interactive') {
+            emit('send-input', {
+              taskId: props.currentTask.id,
+              data: text
+            });
+          }
+          ElMessage.success('已粘贴文本');
+        } catch (error) {
+          ElMessage.error('粘贴失败');
+        }
+        document.body.removeChild(menu);
+      };
+      menu.appendChild(pasteItem);
+      
       // 全选选项
       const selectAllItem = document.createElement('div');
       selectAllItem.className = 'menu-item';
@@ -420,8 +476,7 @@ const initializeTerminal = async () => {
     
     // 显示欢迎信息
     if (!props.currentTask) {
-      terminal.value.writeln('\x1b[36m欢迎使用交互式终端\x1b[0m');
-      terminal.value.writeln('\x1b[90m请在左侧选择一个任务或执行新命令\x1b[0m');
+      terminal.value.writeln('\x1b[36m终端就绪\x1b[0m');
     }
     
     console.log('Xterm terminal initialized successfully');
@@ -460,7 +515,6 @@ const handleClear = () => {
   clearTerminal();
   if (props.currentTask) {
     writeToTerminal('\x1b[2J\x1b[H'); // 清屏并移动光标到顶部
-    writeToTerminal(`\x1b[36m[任务: ${props.currentTask.command}]\x1b[0m\r\n`);
   }
 };
 
@@ -488,6 +542,35 @@ const toggleFitMode = () => {
     nextTick(() => {
       fitTerminal();
     });
+  }
+};
+
+// 切换命令展开状态
+const toggleCommandExpanded = () => {
+  isCommandExpanded.value = !isCommandExpanded.value;
+};
+
+// 复制命令到剪贴板
+const copyCommand = async () => {
+  if (!props.currentTask?.command) return;
+  
+  try {
+    await navigator.clipboard.writeText(props.currentTask.command);
+    ElMessage.success('命令已复制到剪贴板');
+  } catch (error) {
+    console.error('复制失败:', error);
+    // 降级方案
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = props.currentTask.command;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      ElMessage.success('命令已复制到剪贴板');
+    } catch (fallbackError) {
+      ElMessage.error('复制失败');
+    }
   }
 };
 
@@ -553,24 +636,17 @@ watch(() => props.currentTask, (newTask, oldTask) => {
   if (!terminal.value) return;
   
   if (newTask && newTask.id !== oldTask?.id) {
-    // 切换到新任务
+    // 切换到新任务 - 只显示已有输出，不显示切换信息
     clearTerminal();
-    writeToTerminal(`\x1b[36m[切换到任务: ${newTask.command}]\x1b[0m\r\n`);
     
     // 显示已有输出
     if (newTask.output) {
       writeToTerminal(newTask.output);
     }
-    
-    // 如果任务正在运行，显示提示
-    if (newTask.status === 'running') {
-      writeToTerminal(`\x1b[33m[任务正在运行中...]\x1b[0m\r\n`);
-    }
   } else if (!newTask) {
-    // 没有选中任务
+    // 没有选中任务 - 显示简洁的欢迎信息
     clearTerminal();
-    writeToTerminal('\x1b[36m欢迎使用交互式终端\x1b[0m\r\n');
-    writeToTerminal('\x1b[90m请在左侧选择一个任务或执行新命令\x1b[0m\r\n');
+    writeToTerminal('\x1b[36m终端就绪\x1b[0m\r\n');
   }
 }, { immediate: true });
 
@@ -612,7 +688,41 @@ onMounted(async () => {
 onUnmounted(() => {
   // 清理资源
   if (terminal.value) {
-    terminal.value.dispose();
+    try {
+      // 先清理所有插件，避免disposal错误
+      if (fitAddon.value) {
+        try {
+          fitAddon.value.dispose();
+        } catch (error) {
+          console.warn('Error disposing fit addon:', error);
+        }
+        fitAddon.value = undefined;
+      }
+      
+      if (webLinksAddon.value) {
+        try {
+          webLinksAddon.value.dispose();
+        } catch (error) {
+          console.warn('Error disposing weblinks addon:', error);
+        }
+        webLinksAddon.value = undefined;
+      }
+      
+      if (searchAddon.value) {
+        try {
+          searchAddon.value.dispose();
+        } catch (error) {
+          console.warn('Error disposing search addon:', error);
+        }
+        searchAddon.value = undefined;
+      }
+      
+      // 最后dispose终端实例
+      terminal.value.dispose();
+      terminal.value = undefined;
+    } catch (error) {
+      console.warn('Error disposing terminal:', error);
+    }
   }
   
   window.removeEventListener('resize', handleResize);
@@ -638,20 +748,38 @@ defineExpose({
 
 <style scoped>
 .xterm-task-output {
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--el-bg-color);
+  overflow: hidden;
 }
 
 .task-header {
-  padding: 12px 16px;
+  flex-shrink: 0;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color-page);
 }
 
+.task-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+}
+
+.task-main-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
 .task-status-icon {
   flex-shrink: 0;
+  font-size: 16px;
 }
 
 .status-running {
@@ -671,26 +799,54 @@ defineExpose({
   color: var(--el-color-info);
 }
 
-.task-info {
-  display: flex;
-  flex-direction: column;
+.command-display {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-line {
+  max-height: 24px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.command-line.expanded {
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .command-text {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 14px;
   font-weight: 500;
+  line-height: 24px;
+  color: var(--el-text-color-primary);
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 
-.task-meta {
-  margin-top: 2px;
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.expand-btn,
+.copy-btn {
+  color: var(--el-text-color-regular);
+}
+
+.expand-btn:hover,
+.copy-btn:hover {
+  color: var(--el-color-primary);
 }
 
 .terminal-container {
   flex: 1;
   position: relative;
-  overflow: hidden;
   background: #1e1e1e;
+  overflow: hidden;
 }
 
 .terminal-wrapper {
@@ -725,11 +881,51 @@ defineExpose({
   z-index: 20;
 }
 
-.terminal-status-bar {
-  padding: 8px 16px;
+.terminal-footer {
+  flex-shrink: 0;
+  padding: 6px 16px;
   border-top: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color-page);
   font-size: 12px;
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terminal-size-info,
+.task-id-info,
+.time-info,
+.duration-info,
+.exit-code-info {
+  color: var(--el-text-color-regular);
+  font-size: 11px;
+}
+
+.input-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-label {
+  font-size: 11px;
+  color: var(--el-text-color-regular);
 }
 
 @keyframes rotate {
@@ -784,27 +980,32 @@ defineExpose({
 
 /* 响应式调整 */
 @media (max-width: 768px) {
+  .xterm-task-output {
+    height: 100vh;
+  }
+  
   .task-header {
     padding: 8px 12px;
   }
   
-  .task-header .el-col:first-child {
-    span: 24;
-    margin-bottom: 8px;
-  }
-  
-  .task-header .el-col:last-child {
-    span: 24;
-  }
-  
-  .task-header .el-row {
+  .task-header-content {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
   
-  .terminal-status-bar {
-    padding: 6px 12px;
+  .task-actions {
+    justify-content: flex-end;
+  }
+  
+  .footer-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .footer-right {
+    justify-content: space-between;
   }
 }
 </style>

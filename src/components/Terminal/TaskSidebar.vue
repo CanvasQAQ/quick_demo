@@ -51,21 +51,17 @@
           class="task-menu-item"
         >
           <!-- 状态图标 -->
-          <el-tooltip :content="getStatusTooltip(task)" placement="right">
-            <el-icon class="task-status-icon" :class="getStatusClass(task.status)">
-              <Loading v-if="task.status === 'running'" />
-              <SuccessFilled v-else-if="task.status === 'success'" />
-              <CircleCloseFilled v-else-if="task.status === 'error'" />
-              <Clock v-else />
-            </el-icon>
-          </el-tooltip>
+          <el-icon class="task-status-icon" :class="getStatusClass(task.status)">
+            <Loading v-if="task.status === 'running'" />
+            <SuccessFilled v-else-if="task.status === 'success'" />
+            <CircleCloseFilled v-else-if="task.status === 'error'" />
+            <Clock v-else />
+          </el-icon>
 
           <!-- 命令文本 -->
-          <el-tooltip :content="task.command" placement="top">
-            <span class="task-command-text">
-              {{ truncateCommand(task.command) }}
-            </span>
-          </el-tooltip>
+          <span class="task-command-text">
+            {{ truncateCommand(task.command) }}
+          </span>
 
           <!-- 时间标签和操作按钮的容器 -->
           <div class="task-end-content">
@@ -80,29 +76,27 @@
             <!-- 任务操作按钮 -->
             <div class="task-actions">
               <!-- 中断按钮 - 仅运行中的任务显示 -->
-              <el-tooltip content="中断任务" placement="top" v-if="task.status === 'running'">
-                <el-button
-                  text
-                  size="small"
-                  type="warning"
-                  @click.stop="interruptTask(task.id)"
-                  class="task-interrupt-btn"
-                >
-                  <el-icon><CircleClose /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <el-button
+                v-if="task.status === 'running'"
+                text
+                size="small"
+                type="warning"
+                @click.stop="interruptTask(task.id)"
+                class="task-interrupt-btn"
+              >
+                <el-icon><CircleClose /></el-icon>
+              </el-button>
               
               <!-- 删除按钮 - 非运行中的任务显示 -->
-              <el-tooltip content="删除任务" placement="top" v-if="task.status !== 'running'">
-                <el-button
-                  text
-                  size="small"
-                  @click.stop="deleteTask(task.id)"
-                  class="task-delete-btn"
-                >
-                  <el-icon><Close /></el-icon>
-                </el-button>
-              </el-tooltip>
+              <el-button
+                v-if="task.status !== 'running'"
+                text
+                size="small"
+                @click.stop="deleteTask(task.id)"
+                class="task-delete-btn"
+              >
+                <el-icon><Close /></el-icon>
+              </el-button>
             </div>
           </div>
         </el-menu-item>

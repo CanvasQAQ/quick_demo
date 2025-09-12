@@ -125,6 +125,9 @@ export const useTerminalStore = defineStore('terminal', {
     deleteTask(taskId: string) {
       const index = this.tasks.findIndex(task => task.id === taskId);
       if (index !== -1) {
+        // 清理任务的输入缓冲区
+        terminalService.clearInputBuffer(taskId);
+        
         this.tasks.splice(index, 1);
         
         // 如果删除的是当前任务，清除当前任务ID
@@ -191,6 +194,9 @@ export const useTerminalStore = defineStore('terminal', {
         if (message) {
           task.output += `\n${message}`;
         }
+        
+        // 清理已完成任务的输入缓冲区
+        terminalService.clearInputBuffer(taskId);
         
         // isExecuting 现在通过getter自动计算，无需手动更新
       }

@@ -47,8 +47,19 @@ class PtyTerminalSession:
             # 创建进程
             env = os.environ.copy()
             env['TERM'] = 'xterm-256color'
+            env['COLORTERM'] = 'truecolor'  # 支持24位真彩色
             env['COLUMNS'] = str(cols)
             env['LINES'] = str(rows)
+            # 强制启用颜色输出
+            env['CLICOLOR'] = '1'
+            env['FORCE_COLOR'] = '1'
+            env['CLICOLOR_FORCE'] = '1'
+            # 禁用分页器以确保颜色输出
+            env['PAGER'] = 'cat'
+            env['LESS'] = '-R'  # 允许ANSI颜色通过
+            # Python特定的颜色强制
+            env['PYTHONUNBUFFERED'] = '1'
+            env['PY_COLORS'] = '1'
             
             if os.name == 'nt':  # Windows - 使用winpty或者fallback到subprocess
                 # Windows下pty支持有限，可能需要特殊处理
