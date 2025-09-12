@@ -1,6 +1,6 @@
 <template>
   <el-config-provider :locale="locale" :size="config.size" :z-index="config.zIndex">
-    <div class="app-container" :class="{ 'dark': isDark }">
+    <div class="app-container ui-font" :class="{ 'dark': isDark }">
       <!-- 顶部导航栏 -->
       <el-header class="app-header"  >
         <div class="header-left">

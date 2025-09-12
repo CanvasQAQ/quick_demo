@@ -11,6 +11,19 @@ export interface ConnectionResult {
   message?: string;
 }
 
+// 调试模式控制
+const DEBUG_MODE = import.meta.env.DEV && localStorage.getItem('terminal-debug') === 'true';
+
+function debugLog(message: string, ...args: any[]) {
+  if (DEBUG_MODE) {
+    console.log(`[TerminalService] ${message}`, ...args);
+  }
+}
+
+function errorLog(message: string, ...args: any[]) {
+  console.error(`[TerminalService] ${message}`, ...args);
+}
+
 class TerminalService {
   private socket: Socket | null = null;
   private sessionId: string | null = null;
@@ -28,7 +41,7 @@ class TerminalService {
   async connect(config: TerminalConfig): Promise<ConnectionResult> {
     return new Promise((resolve) => {
       try {
-        console.log('Connecting to terminal server:', config.host, config.port);
+        debugLog('Connecting to terminal server:', config.host, config.port);
         const url = `http://${config.host}:${config.port}`;
         
         this.socket = io(url, {
@@ -42,11 +55,11 @@ class TerminalService {
 
         // 监听连接成功事件
         this.socket.on('connect', () => {
-          console.log('SocketIO connected successfully');
+          debugLog('SocketIO connected successfully');
           
           // 监听 terminal_connected 事件 - 添加错误处理
           this.socket?.on('terminal_connected', (data: any) => {
-            console.log('Received terminal_connected event:', data);
+            debugLog('Received terminal_connected event:', data);
             
             // 添加数据验证
             if (data && typeof data === 'object' && data.sessionId) {
@@ -60,7 +73,7 @@ class TerminalService {
                 this.connectResolve = null;
               }
             } else {
-              console.error('Invalid terminal_connected data:', data);
+              errorLog('Invalid terminal_connected data:', data);
               if (this.connectResolve) {
                 this.connectResolve({
                   success: false,
@@ -75,13 +88,13 @@ class TerminalService {
           this.setupEventListeners();
 
           // 发送连接请求
-          console.log('Sending terminal_connect event');
+          debugLog('Sending terminal_connect event');
           this.socket?.emit('terminal_connect', {});
         });
 
         // 监听连接错误
         this.socket.on('connect_error', (error) => {
-          console.error('Connection error:', error);
+          errorLog('Connection error:', error);
           if (this.connectResolve) {
             this.connectResolve({
               success: false,
@@ -93,14 +106,14 @@ class TerminalService {
 
         // 监听断开连接
         this.socket.on('disconnect', (reason) => {
-          console.log('Disconnected:', reason);
+          debugLog('Disconnected:', reason);
           this.sessionId = null;
         });
 
         // 设置连接超时
         setTimeout(() => {
           if (this.connectResolve) {
-            console.log('Connection timeout');
+            debugLog('Connection timeout');
             this.connectResolve({
               success: false,
               message: 'Connection timeout - no response from server'
@@ -125,7 +138,7 @@ class TerminalService {
   // 执行命令 (PTY版本)
   async executeCommand(command: string, taskId: string, options?: { rows?: number; cols?: number }): Promise<boolean> {
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return false;
     }
 
@@ -155,7 +168,7 @@ class TerminalService {
       // 设置命令执行超时
       setTimeout(() => {
         this.socket?.off('terminal_complete', completeHandler);
-        console.warn('PTY command execution timeout for task:', taskId);
+        debugLog('PTY command execution timeout for task:', taskId);
         resolve(false);
       }, 30000);
     });
@@ -164,7 +177,7 @@ class TerminalService {
   // 向终端发送输入 (PTY交互) - 带缓冲和节流
   sendInput(taskId: string, data: string): boolean {
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return false;
     }
 
@@ -205,7 +218,7 @@ class TerminalService {
     }
 
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return;
     }
 
@@ -238,7 +251,7 @@ class TerminalService {
   // 立即发送输入（用于特殊情况，如中断信号）
   sendInputImmediate(taskId: string, data: string): boolean {
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return false;
     }
 
@@ -259,7 +272,7 @@ class TerminalService {
   // 调整终端尺寸
   resizeTerminal(taskId: string, rows: number, cols: number): boolean {
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return false;
     }
 
@@ -277,7 +290,7 @@ class TerminalService {
   // 中断指定任务
   interruptCommand(taskId: string): boolean {
     if (!this.socket || !this.sessionId) {
-      console.error('Not connected to terminal');
+      errorLog('Not connected to terminal');
       return false;
     }
 

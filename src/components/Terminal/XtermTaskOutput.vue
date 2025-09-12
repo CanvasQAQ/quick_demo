@@ -165,6 +165,15 @@ import {
 // 引入xterm.js样式
 import '@xterm/xterm/css/xterm.css';
 
+// 调试模式控制
+const DEBUG_MODE = import.meta.env.DEV && localStorage.getItem('xterm-debug') === 'true';
+
+function debugLog(message: string, ...args: any[]) {
+  if (DEBUG_MODE) {
+    console.log(`[XtermTaskOutput] ${message}`, ...args);
+  }
+}
+
 interface Props {
   currentTask?: Task;
   isConnected?: boolean;
@@ -248,7 +257,7 @@ const initializeTerminal = async () => {
         brightWhite: '#ffffff'
       },
       fontSize: 14,
-      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+      fontFamily: 'MesloLGS NF, Monaco, Menlo, "Ubuntu Mono", Consolas, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace',
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 10000,
@@ -479,7 +488,7 @@ const initializeTerminal = async () => {
       terminal.value.writeln('\x1b[36m终端就绪\x1b[0m');
     }
     
-    console.log('Xterm terminal initialized successfully');
+    debugLog('Xterm terminal initialized successfully');
     
   } catch (error) {
     console.error('Failed to initialize terminal:', error);
@@ -816,7 +825,7 @@ defineExpose({
 }
 
 .command-text {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--terminal-font-family);
   font-size: 14px;
   font-weight: 500;
   line-height: 24px;

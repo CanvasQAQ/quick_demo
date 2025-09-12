@@ -15,10 +15,22 @@ import fcntl
 
 # 配置日志
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # 改为INFO级别，减少DEBUG输出
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('PtyTerminalHandler')
+
+# 调试模式控制
+DEBUG_MODE = os.environ.get('PTY_DEBUG', 'false').lower() == 'true'
+
+def debug_log(message: str, *args):
+    """仅在调试模式下输出日志"""
+    if DEBUG_MODE:
+        logger.debug(message, *args)
+
+def info_log(message: str, *args):
+    """重要信息日志"""
+    logger.info(message, *args)
 
 class PtyTerminalSession:
     def __init__(self, session_id: str, socketio: SocketIO):
@@ -26,16 +38,16 @@ class PtyTerminalSession:
         self.socketio = socketio
         self.terminals: Dict[str, dict] = {}  # taskId -> {master_fd, slave_fd, process, thread}
         self.running_tasks: Dict[str, bool] = {}  # taskId -> is_running
-        logger.debug("Created pty terminal session: %s", session_id)
+        debug_log("Created pty terminal session: %s", session_id)
     
     def create_terminal(self, task_id: str, command: str, rows: int = 24, cols: int = 80):
         """创建新的pty终端"""
         try:
-            logger.debug("Creating pty terminal for task: %s, command: %s", task_id, command)
+            debug_log("Creating pty terminal for task: %s, command: %s", task_id, command)
             
             # 检查任务是否已存在
             if task_id in self.terminals:
-                logger.warning("Terminal %s already exists", task_id)
+                debug_log("Terminal %s already exists", task_id)
                 return False
             
             # 创建pty
@@ -110,7 +122,7 @@ class PtyTerminalSession:
             
             self.terminals[task_id]['thread'] = output_thread
             
-            logger.info("Pty terminal created successfully for task: %s", task_id)
+            info_log("Terminal created for task: %s", task_id)
             return True
             
         except Exception as e:
@@ -132,7 +144,7 @@ class PtyTerminalSession:
             size = struct.pack('HHHH', rows, cols, 0, 0)
             fcntl.ioctl(fd, termios.TIOCSWINSZ, size)
         except Exception as e:
-            logger.debug("Failed to set terminal size: %s", e)
+            debug_log("Failed to set terminal size: %s", e)
     
     def resize_terminal(self, task_id: str, rows: int, cols: int):
         """调整终端尺寸"""
@@ -141,14 +153,14 @@ class PtyTerminalSession:
             self._set_terminal_size(terminal_info['master_fd'], rows, cols)
             terminal_info['rows'] = rows
             terminal_info['cols'] = cols
-            logger.debug("Resized terminal %s to %dx%d", task_id, rows, cols)
+            debug_log("Resized terminal %s to %dx%d", task_id, rows, cols)
             return True
         return False
     
     def write_to_terminal(self, task_id: str, data: str):
         """向终端写入数据（用户输入）"""
         if task_id not in self.terminals:
-            logger.warning("Terminal %s not found", task_id)
+            debug_log("Terminal %s not found", task_id)
             return False
         
         terminal_info = self.terminals[task_id]
@@ -156,7 +168,7 @@ class PtyTerminalSession:
             # 将字符串编码为字节
             data_bytes = data.encode('utf-8')
             os.write(terminal_info['master_fd'], data_bytes)
-            logger.debug("Wrote %d bytes to terminal %s", len(data_bytes), task_id)
+            debug_log("Wrote %d bytes to terminal %s", len(data_bytes), task_id)
             return True
         except Exception as e:
             logger.error("Failed to write to terminal %s: %s", task_id, e)
@@ -172,12 +184,12 @@ class PtyTerminalSession:
         process = terminal_info['process']
         
         try:
-            logger.debug("Starting pty output reading for task: %s", task_id)
+            debug_log("Starting pty output reading for task: %s", task_id)
             
             while True:
                 # 检查进程是否还在运行
                 if process.poll() is not None:
-                    logger.debug("Process for task %s has terminated", task_id)
+                    debug_log("Process for task %s has terminated", task_id)
                     break
                 
                 # 使用select检查是否有数据可读
@@ -190,7 +202,7 @@ class PtyTerminalSession:
                         if data:
                             # 解码并发送到前端
                             output = data.decode('utf-8', errors='replace')
-                            logger.debug("Read %d bytes from pty %s", len(data), task_id)
+                            debug_log("Read %d bytes from pty %s", len(data), task_id)
                             
                             self.socketio.emit('terminal_output', {
                                 'sessionId': self.session_id,
@@ -203,7 +215,7 @@ class PtyTerminalSession:
                             break
                     except OSError as e:
                         if e.errno == 5:  # EIO - 通常表示pty已关闭
-                            logger.debug("PTY closed for task %s", task_id)
+                            debug_log("PTY closed for task %s", task_id)
                             break
                         else:
                             logger.error("Error reading from pty %s: %s", task_id, e)
@@ -211,7 +223,7 @@ class PtyTerminalSession:
             
             # 进程结束处理
             return_code = process.poll() if process else -1
-            logger.debug("Task %s completed with return code: %s", task_id, return_code)
+            info_log("Task %s completed with code: %s", task_id, return_code)
             
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
@@ -236,7 +248,7 @@ class PtyTerminalSession:
         finally:
             # 清理任务状态
             self.running_tasks[task_id] = False
-            logger.debug("PTY output reading thread finished for task: %s", task_id)
+            debug_log("PTY output reading thread finished for task: %s", task_id)
     
     def interrupt_terminal(self, task_id: str):
         """中断指定终端"""

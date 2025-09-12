@@ -37,13 +37,17 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'index.html')
         }
-      }
+      },
+      // 确保字体文件被复制到构建输出中
+      assetsDir: 'assets'
     },
     base: './',
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src')
       }
-    }
+    },
+    // 确保字体文件被正确处理
+    assetsInclude: ['**/*.ttf', '**/*.otf', '**/*.woff', '**/*.woff2']
   }
 })

@@ -302,7 +302,7 @@ const getStatusClass = (status: Task['status']): string => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--terminal-font-family);
   font-size: 13px;
 }
 
