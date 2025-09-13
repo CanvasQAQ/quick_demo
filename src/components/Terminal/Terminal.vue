@@ -176,6 +176,7 @@
           @reexecute-task="handleReexecuteTask"
           @interrupt-task="handleInterruptTask"
           @send-input="handleSendInput"
+          @send-input-immediate="handleSendInputImmediate"
           @resize-terminal="handleResizeTerminal"
           ref="xtermOutputRef"
         />
@@ -393,6 +394,10 @@ const handleExecuteCommand = (command: string) => {
 
 const handleSendInput = (data: { taskId: string; data: string }) => {
   store.sendInputToTerminal(data.taskId, data.data);
+};
+
+const handleSendInputImmediate = (data: { taskId: string; data: string }) => {
+  store.sendInputImmediateToTerminal(data.taskId, data.data);
 };
 
 const handleResizeTerminal = (data: { taskId: string; rows: number; cols: number }) => {

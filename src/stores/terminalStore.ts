@@ -186,7 +186,15 @@ export const useTerminalStore = defineStore('terminal', {
     completeTask(taskId: string, exitCode: number, message?: string) {
       const task = this.tasks.find(t => t.id === taskId);
       if (task) {
-        task.status = exitCode === 0 ? 'success' : 'error';
+        // 根据退出码设置状态
+        if (exitCode === -2) {
+          task.status = 'interrupted'; // 中断状态
+        } else if (exitCode === 0) {
+          task.status = 'success';
+        } else {
+          task.status = 'error';
+        }
+        
         task.endTime = new Date();
         task.exitCode = exitCode;
         task.duration = (task.endTime.getTime() - task.startTime.getTime()) / 1000;
@@ -293,6 +301,15 @@ export const useTerminalStore = defineStore('terminal', {
       }
 
       return terminalService.sendInput(taskId, data);
+    },
+
+    // 立即发送输入到终端（绕过缓冲，用于中断信号等关键输入）
+    sendInputImmediateToTerminal(taskId: string, data: string): boolean {
+      if (!this.isConnected) {
+        return false;
+      }
+
+      return terminalService.sendInputImmediate(taskId, data);
     },
 
     // 调整终端尺寸

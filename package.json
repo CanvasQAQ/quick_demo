@@ -55,7 +55,11 @@
       "dist/**/*",
       "dist-electron/**/*",
       "node_modules/**/*",
+      "backend/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "backend/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity"

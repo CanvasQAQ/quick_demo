@@ -31,7 +31,7 @@ export interface ConnectionResult {
 export interface Task {
   id: string;
   command: string;
-  status: 'pending' | 'running' | 'success' | 'error';
+  status: 'pending' | 'running' | 'success' | 'error' | 'interrupted';
   startTime: Date;
   endTime?: Date;
   duration?: number; // 执行时长（秒）

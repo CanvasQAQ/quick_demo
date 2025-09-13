@@ -55,6 +55,7 @@
             <Loading v-if="task.status === 'running'" />
             <SuccessFilled v-else-if="task.status === 'success'" />
             <CircleCloseFilled v-else-if="task.status === 'error'" />
+            <WarningFilled v-else-if="task.status === 'interrupted'" />
             <Clock v-else />
           </el-icon>
 
@@ -124,7 +125,8 @@ import {
   CircleCloseFilled,
   CircleClose,
   Clock,
-  Close
+  Close,
+  WarningFilled
 } from '@element-plus/icons-vue';
 
 interface Props {
@@ -167,6 +169,10 @@ const errorCount = computed(() =>
   props.tasks.filter(task => task.status === 'error').length
 );
 
+const interruptedCount = computed(() => 
+  props.tasks.filter(task => task.status === 'interrupted').length
+);
+
 // 方法
 const handleTaskSelect = (taskId: string) => {
   emit('select-task', taskId);
@@ -207,6 +213,7 @@ const getStatusTooltip = (task: Task): string => {
     running: '执行中',
     success: '执行成功',
     error: `执行失败 - 退出码${task.exitCode ?? 'N/A'}`,
+    interrupted: '用户中断',
     pending: '等待执行'
   };
   return statusMap[task.status];
@@ -217,6 +224,7 @@ const getStatusClass = (status: Task['status']): string => {
     running: 'status-running',
     success: 'status-success',
     error: 'status-error',
+    interrupted: 'status-interrupted',
     pending: 'status-pending'
   };
   return classMap[status];
@@ -273,28 +281,33 @@ const getStatusClass = (status: Task['status']): string => {
 
 .task-menu-item.is-active {
   /* background-color: var(--el-menu-active-color); */
-  color: var(--el-color-primary);
+  /* Remove general color override to let status icons keep their colors */
 }
 
 .task-status-icon {
   flex-shrink: 0;
 }
 
-.status-running {
-  color: var(--el-color-warning);
+/* Status icon colors with higher specificity to override active state */
+.task-menu-item .status-running {
+  color: #2472c8 !important;
   animation: rotate 1s linear infinite;
 }
 
-.status-success {
-  /* color: var(--el-color-success); */
+.task-menu-item .status-success {
+  color: #0dbc79 !important;
 }
 
-.status-error {
-  color: var(--el-color-danger);
+.task-menu-item .status-error {
+  color: #cd3131 !important;
 }
 
-.status-pending {
-  color: var(--el-color-info);
+.task-menu-item .status-interrupted {
+  color: #e5e510 !important;
+}
+
+.task-menu-item .status-pending {
+  color: var(--el-color-info) !important;
 }
 
 .task-command-text {
@@ -304,6 +317,7 @@ const getStatusClass = (status: Task['status']): string => {
   white-space: nowrap;
   font-family: var(--terminal-font-family);
   font-size: 13px;
+  margin-right: 8px; /* Add space for cleaner layout */
 }
 
 .task-duration {
@@ -346,8 +360,26 @@ const getStatusClass = (status: Task['status']): string => {
 .task-interrupt-btn,
 .task-delete-btn {
   flex-shrink: 0;
-  padding: 2px 4px;
-  min-height: 20px;
+  padding: 4px;
+  min-height: 24px;
+  min-width: 24px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.task-interrupt-btn:hover,
+.task-delete-btn:hover {
+  background-color: var(--el-fill-color-light);
+}
+
+.task-delete-btn:hover {
+  background-color: var(--el-color-danger-light-8);
+  color: var(--el-color-danger);
+}
+
+.task-interrupt-btn:hover {
+  background-color: var(--el-color-warning-light-8);
+  color: var(--el-color-warning);
 }
 
 .empty-state {

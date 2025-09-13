@@ -156,3 +156,4 @@ share/python-wheels/
 MANIFEST
 *.pyc
 *.pyo
+temp_dev.md

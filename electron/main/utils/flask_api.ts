@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, app } from 'electron';
 import * as net from 'net';
 import * as child_process from 'child_process';
 import * as path from 'path';
@@ -24,8 +24,30 @@ export class FlaskApiManager {
   private currentPort: number | null = null;
   private backendPath: string;
 
-  constructor(backendPath: string = path.join(process.cwd(), 'backend')) {
-    this.backendPath = backendPath;
+  constructor(backendPath?: string) {
+    // In production, backend is in the app's resource directory
+    // In development, it's relative to the project root
+    if (backendPath) {
+      this.backendPath = backendPath;
+    } else if (app.isPackaged) {
+      // Production: backend is packaged with the app
+      this.backendPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend');
+      // Fallback for cases where backend is in the main resources
+      const fs = require('fs');
+      if (!fs.existsSync(this.backendPath)) {
+        this.backendPath = path.join(process.resourcesPath, 'backend');
+      }
+    } else {
+      // Development: use project root
+      this.backendPath = path.join(process.cwd(), 'backend');
+    }
+    
+    console.log(`FlaskApiManager initialized:`);
+    console.log(`  - Packaged: ${app.isPackaged}`);
+    console.log(`  - Backend Path: ${this.backendPath}`);
+    console.log(`  - Process CWD: ${process.cwd()}`);
+    console.log(`  - Resources Path: ${process.resourcesPath || 'undefined'}`);
+    
     this.setupIpcHandlers();
   }
 

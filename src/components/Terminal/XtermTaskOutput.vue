@@ -9,6 +9,7 @@
             <Loading v-if="currentTask.status === 'running'" />
             <SuccessFilled v-else-if="currentTask.status === 'success'" />
             <CircleCloseFilled v-else-if="currentTask.status === 'error'" />
+            <WarningFilled v-else-if="currentTask.status === 'interrupted'" />
             <Clock v-else />
           </el-icon>
           
@@ -159,7 +160,8 @@ import {
   Monitor,
   ArrowDown,
   ArrowUp,
-  CopyDocument
+  CopyDocument,
+  WarningFilled
 } from '@element-plus/icons-vue';
 
 // 引入xterm.js样式
@@ -183,6 +185,7 @@ interface Emits {
   (e: 'reexecute-task', taskId: string): void;
   (e: 'interrupt-task', taskId: string): void;
   (e: 'send-input', data: { taskId: string; data: string }): void;
+  (e: 'send-input-immediate', data: { taskId: string; data: string }): void;
   (e: 'resize-terminal', data: { taskId: string; rows: number; cols: number }): void;
 }
 
@@ -278,7 +281,8 @@ const initializeTerminal = async () => {
       fastScrollSensitivity: 5,
       // 启用真彩色支持
       allowUnicodeVersion11: true,
-      logLevel: 'debug'
+      // 只在开发模式且启用调试时输出详细日志
+      logLevel: DEBUG_MODE ? 'debug' : 'warn'
     });
     
     // 添加插件
@@ -321,27 +325,40 @@ const initializeTerminal = async () => {
 
     // 添加键盘快捷键支持
     terminal.value.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      // Ctrl+C 复制选中文本
-      if (event.ctrlKey && event.code === 'KeyC' && terminal.value?.hasSelection()) {
-        const selection = terminal.value.getSelection();
-        if (selection) {
-          navigator.clipboard.writeText(selection).then(() => {
-            console.log('文本已复制到剪贴板');
-          }).catch((err) => {
-            console.error('复制失败:', err);
-            // 如果现代API失败，尝试传统方法
-            try {
-              const textArea = document.createElement('textarea');
-              textArea.value = selection;
-              document.body.appendChild(textArea);
-              textArea.select();
-              document.execCommand('copy');
-              document.body.removeChild(textArea);
-              console.log('文本已复制到剪贴板 (fallback)');
-            } catch (fallbackErr) {
-              console.error('fallback复制也失败:', fallbackErr);
-            }
-          });
+      // Ctrl+C 处理 - 区分复制和中断
+      if (event.ctrlKey && event.code === 'KeyC') {
+        if (terminal.value?.hasSelection()) {
+          // 有选中文本时进行复制
+          const selection = terminal.value.getSelection();
+          if (selection) {
+            navigator.clipboard.writeText(selection).then(() => {
+              console.log('文本已复制到剪贴板');
+            }).catch((err) => {
+              console.error('复制失败:', err);
+              // 如果现代API失败，尝试传统方法
+              try {
+                const textArea = document.createElement('textarea');
+                textArea.value = selection;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                console.log('文本已复制到剪贴板 (fallback)');
+              } catch (fallbackErr) {
+                console.error('fallback复制也失败:', fallbackErr);
+              }
+            });
+            return false; // 阻止默认行为
+          }
+        } else {
+          // 无选中文本时发送中断信号
+          if (props.currentTask && inputMode.value === 'interactive') {
+            debugLog('Sending Ctrl+C interrupt signal to task:', props.currentTask.id);
+            emit('send-input-immediate', {
+              taskId: props.currentTask.id,
+              data: '\x03'  // Ctrl+C 的ASCII码 (SIGINT)
+            });
+          }
           return false; // 阻止默认行为
         }
       }
@@ -404,7 +421,13 @@ const initializeTerminal = async () => {
               ElMessage.error('复制失败');
             });
           }
-          document.body.removeChild(menu);
+          try {
+            if (document.body.contains(menu)) {
+              document.body.removeChild(menu);
+            }
+          } catch (error) {
+            debugLog('Error removing menu after copy:', error);
+          }
         };
         menu.appendChild(copyItem);
       }
@@ -430,10 +453,24 @@ const initializeTerminal = async () => {
             });
           }
           ElMessage.success('已粘贴文本');
+          
+          // 粘贴后恢复终端焦点
+          setTimeout(() => {
+            if (terminal.value) {
+              terminal.value.focus();
+            }
+          }, 50);
+          
         } catch (error) {
           ElMessage.error('粘贴失败');
         }
-        document.body.removeChild(menu);
+        try {
+          if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+          }
+        } catch (error) {
+          debugLog('Error removing menu after paste:', error);
+        }
       };
       menu.appendChild(pasteItem);
       
@@ -450,7 +487,19 @@ const initializeTerminal = async () => {
       selectAllItem.onmouseout = () => selectAllItem.style.background = 'transparent';
       selectAllItem.onclick = () => {
         terminal.value?.selectAll();
-        document.body.removeChild(menu);
+        try {
+          if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+          }
+        } catch (error) {
+          debugLog('Error removing menu after select all:', error);
+        }
+        // 恢复终端焦点
+        setTimeout(() => {
+          if (terminal.value) {
+            terminal.value.focus();
+          }
+        }, 50);
       };
       menu.appendChild(selectAllItem);
       
@@ -467,7 +516,19 @@ const initializeTerminal = async () => {
       clearItem.onmouseout = () => clearItem.style.background = 'transparent';
       clearItem.onclick = () => {
         handleClear();
-        document.body.removeChild(menu);
+        try {
+          if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+          }
+        } catch (error) {
+          debugLog('Error removing menu after clear:', error);
+        }
+        // 恢复终端焦点
+        setTimeout(() => {
+          if (terminal.value) {
+            terminal.value.focus();
+          }
+        }, 50);
       };
       menu.appendChild(clearItem);
       
@@ -476,11 +537,36 @@ const initializeTerminal = async () => {
       // 点击其他地方关闭菜单
       const closeMenu = (e: MouseEvent) => {
         if (!menu.contains(e.target as Node)) {
-          document.body.removeChild(menu);
+          try {
+            if (document.body.contains(menu)) {
+              document.body.removeChild(menu);
+            }
+          } catch (error) {
+            debugLog('Error removing context menu:', error);
+          }
           document.removeEventListener('click', closeMenu);
         }
       };
-      setTimeout(() => document.addEventListener('click', closeMenu), 0);
+      
+      // 添加键盘ESC关闭菜单
+      const closeMenuOnEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          try {
+            if (document.body.contains(menu)) {
+              document.body.removeChild(menu);
+            }
+          } catch (error) {
+            debugLog('Error removing context menu on escape:', error);
+          }
+          document.removeEventListener('click', closeMenu);
+          document.removeEventListener('keydown', closeMenuOnEscape);
+        }
+      };
+      
+      setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+        document.addEventListener('keydown', closeMenuOnEscape);
+      }, 0);
     });
     
     // 显示欢迎信息
@@ -610,6 +696,7 @@ const getStatusClass = (status: Task['status']): string => {
     running: 'status-running',
     success: 'status-success',
     error: 'status-error',
+    interrupted: 'status-interrupted',
     pending: 'status-pending'
   };
   return classMap[status];
@@ -620,6 +707,7 @@ const getStatusTagType = (status: Task['status']): string => {
     running: 'warning',
     success: 'success',
     error: 'danger',
+    interrupted: 'warning',
     pending: 'info'
   };
   return typeMap[status];
@@ -630,6 +718,7 @@ const getStatusText = (status: Task['status']): string => {
     running: '运行中',
     success: '已完成',
     error: '已失败',
+    interrupted: '已中断',
     pending: '等待中'
   };
   return textMap[status];
@@ -792,16 +881,20 @@ defineExpose({
 }
 
 .status-running {
-  color: var(--el-color-warning);
+  color: #2472c8;
   animation: rotate 1s linear infinite;
 }
 
 .status-success {
-  color: var(--el-color-success);
+  color: #0dbc79;
 }
 
 .status-error {
-  color: var(--el-color-danger);
+  color: #cd3131;
+}
+
+.status-interrupted {
+  color: #e5e510;
 }
 
 .status-pending {
