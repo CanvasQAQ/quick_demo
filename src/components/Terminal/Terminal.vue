@@ -178,6 +178,7 @@
           @send-input="handleSendInput"
           @send-input-immediate="handleSendInputImmediate"
           @resize-terminal="handleResizeTerminal"
+          @add-to-favorites="handleAddToFavorites"
           ref="xtermOutputRef"
         />
       </el-main>
@@ -433,11 +434,11 @@ const handleAddToFavorites = (command: string) => {
 
 const handleInterruptTask = (taskId: string) => {
   const success = store.interruptTask(taskId);
-  if (success) {
-    ElMessage.success('任务中断信号已发送');
-  } else {
-    ElMessage.warning('无法中断该任务');
+  if (!success) {
+    // 只有在真的无法中断时才显示警告
+    ElMessage.warning('无法中断该任务：任务未运行或已结束');
   }
+  // 成功时不显示消息，用户可以从任务状态变化看出结果
 };
 
 const handleInterruptCommand = (): boolean => {

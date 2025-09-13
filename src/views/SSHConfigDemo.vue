@@ -103,7 +103,8 @@
           <ApiTester 
             class="ml-4"
             :show-input="false"
-            :base-url="baseUrl"
+            :key="localAccessUrl"
+            :base-url="localAccessUrl"
             :preset-buttons="presetButtons"
           />
 
@@ -337,8 +338,10 @@ const configForm = reactive({
 })
 const baseUrl = ref('')
 
-const presetButtons = ref([
-  { label: '测试本地端口', endpoint: 'http://127.0.0.1:'+ configForm.localPort},
+// 使用computed使presetButtons响应式
+const presetButtons = computed(() => [
+  { label: '测试本地端口', endpoint: '/' },
+  // { label: '健康检查', endpoint: '/health' },
 ])
 // 跳板机列表
 const jumpHosts = reactive([])

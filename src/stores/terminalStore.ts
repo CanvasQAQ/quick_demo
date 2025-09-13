@@ -186,26 +186,26 @@ export const useTerminalStore = defineStore('terminal', {
     completeTask(taskId: string, exitCode: number, message?: string) {
       const task = this.tasks.find(t => t.id === taskId);
       if (task) {
-        // 根据退出码设置状态
-        if (exitCode === -2) {
+        // 根据退出码和任务中断标记设置状态
+        if (exitCode === -2 || (task as any).wasInterrupted) {
           task.status = 'interrupted'; // 中断状态
         } else if (exitCode === 0) {
           task.status = 'success';
         } else {
           task.status = 'error';
         }
-        
+
         task.endTime = new Date();
         task.exitCode = exitCode;
         task.duration = (task.endTime.getTime() - task.startTime.getTime()) / 1000;
-        
+
         if (message) {
           task.output += `\n${message}`;
         }
-        
+
         // 清理已完成任务的输入缓冲区
         terminalService.clearInputBuffer(taskId);
-        
+
         // isExecuting 现在通过getter自动计算，无需手动更新
       }
     },
@@ -332,12 +332,15 @@ export const useTerminalStore = defineStore('terminal', {
         return false;
       }
 
+      // 标记任务为用户主动中断
+      (task as any).wasInterrupted = true;
+
       const success = terminalService.interruptCommand(taskId);
       if (success) {
         // 标记任务为中断状态 - 实际状态更新会通过事件监听器处理
         console.log(`Interrupt signal sent for task: ${taskId}`);
       }
-      
+
       return success;
     },
 

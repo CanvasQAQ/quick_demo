@@ -423,16 +423,16 @@ const handleGlobalKeyDown = (event: KeyboardEvent) => {
     executeQuickCommand('clear');
   }
   
-  // Ctrl+C 中断（只有当有运行任务时）
-  if (event.ctrlKey && event.key === 'c' && runningTasksCount.value > 0) {
-    event.preventDefault();
-    const success = emit('interrupt-command');
-    if (success) {
-      ElMessage.success('命令已中断');
-    } else {
-      ElMessage.warning('无法中断命令');
-    }
-  }
+  // // Ctrl+C 中断（只有当有运行任务时）
+  // if (event.ctrlKey && event.key === 'c' && runningTasksCount.value > 0) {
+  //   event.preventDefault();
+  //   const success = emit('interrupt-command');
+  //   if (success) {
+  //     ElMessage.success('命令已中断');
+  //   } else {
+  //     ElMessage.warning('无法中断命令');
+  //   }
+  // }
 };
 
 onMounted(() => {

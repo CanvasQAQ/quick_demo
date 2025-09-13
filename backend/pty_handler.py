@@ -228,8 +228,8 @@ class PtyTerminalSession:
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
                 'taskId': task_id,
-                'exitCode': return_code,
-                'message': f'Process exited with code {return_code}'
+                'exitCode': return_code
+                # 移除message，不在终端中显示退出码
             })
             
             self.socketio.emit('terminal_status', {
@@ -316,8 +316,8 @@ class PtyTerminalSession:
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
                 'taskId': task_id,
-                'exitCode': -2,  # 中断退出码
-                'message': 'Terminal interrupted by user'
+                'exitCode': -2  # 中断退出码
+                # 移除message，不在终端中显示中断信息
             })
             
             logger.info("Terminal interrupted successfully: %s", task_id)
@@ -581,14 +581,32 @@ class PtyTerminalHandler:
                 return
             
             if not session.running_tasks.get(task_id, False):
-                logger.debug("No running terminal to interrupt: %s", task_id)
-                emit('terminal_output', {
-                    'sessionId': session_id,
-                    'taskId': task_id,
-                    'output': 'No running terminal to interrupt.\r\n',
-                    'type': 'system'
-                })
-                return
+                # 检查终端是否仍然存在且进程仍在运行
+                if task_id in session.terminals:
+                    terminal_info = session.terminals[task_id]
+                    process = terminal_info.get('process')
+                    if process and process.poll() is None:
+                        # 进程仍在运行，更新运行状态并继续中断
+                        session.running_tasks[task_id] = True
+                        logger.debug("Updated running status for task: %s", task_id)
+                    else:
+                        logger.debug("Process already terminated for task: %s", task_id)
+                        emit('terminal_output', {
+                            'sessionId': session_id,
+                            'taskId': task_id,
+                            'output': 'Process already terminated.\r\n',
+                            'type': 'system'
+                        })
+                        return
+                else:
+                    logger.debug("No terminal found for interrupt: %s", task_id)
+                    emit('terminal_output', {
+                        'sessionId': session_id,
+                        'taskId': task_id,
+                        'output': 'Terminal not found.\r\n',
+                        'type': 'system'
+                    })
+                    return
             
             # 中断指定终端
             success = session.interrupt_terminal(task_id)

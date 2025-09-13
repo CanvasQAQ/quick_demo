@@ -24,52 +24,102 @@
         <!-- 右侧：操作按钮 -->
         <div class="task-actions">
           <!-- 展开/收起命令按钮 -->
-          <el-button
-            v-if="isCommandTruncated"
-            text
-            size="small"
-            @click="toggleCommandExpanded"
-            class="expand-btn"
-          >
-            <el-icon><ArrowDown v-if="!isCommandExpanded" /><ArrowUp v-else /></el-icon>
-          </el-button>
-          
+          <el-tooltip content="展开/收起命令" placement="top">
+            <el-button
+              v-if="isCommandTruncated"
+              text
+              size="small"
+              @click="toggleCommandExpanded"
+              class="expand-btn"
+            >
+              <el-icon><ArrowDown v-if="!isCommandExpanded" /><ArrowUp v-else /></el-icon>
+            </el-button>
+          </el-tooltip>
+
           <!-- 复制命令按钮 -->
-          <el-button
-            text
-            size="small"
-            @click="copyCommand"
-            class="copy-btn"
-          >
-            <el-icon><CopyDocument /></el-icon>
-          </el-button>
+          <el-tooltip content="复制命令" placement="top">
+            <el-button
+              text
+              size="small"
+              @click="copyCommand"
+              class="copy-btn"
+            >
+              <el-icon><CopyDocument /></el-icon>
+            </el-button>
+          </el-tooltip>
+
+          <!-- 收藏命令按钮 -->
+          <el-tooltip content="收藏命令" placement="top">
+            <el-button
+              text
+              size="small"
+              @click="favoriteCommand"
+              class="favorite-btn"
+            >
+              <el-icon><Star /></el-icon>
+            </el-button>
+          </el-tooltip>
           
           <!-- 任务控制按钮 -->
           <el-button-group size="small">
-            <el-button 
-              v-if="currentTask.status === 'running'"
-              type="warning" 
-              @click="handleInterrupt"
-              :loading="isInterrupting"
-            >
-              <el-icon><CircleClose /></el-icon>
-            </el-button>
-            
-            <el-button 
-              v-else
-              type="primary" 
-              @click="handleReexecute"
-            >
-              <el-icon><Refresh /></el-icon>
-            </el-button>
-            
-            <el-button @click="handleClear">
-              <el-icon><Delete /></el-icon>
-            </el-button>
-            
-            <el-button @click="toggleFitMode">
-              <el-icon><FullScreen /></el-icon>
-            </el-button>
+            <el-tooltip content="中断任务" placement="top">
+              <el-button
+                v-if="currentTask.status === 'running'"
+                type="warning"
+                @click="handleInterrupt"
+                :loading="isInterrupting"
+              >
+                <el-icon><CircleClose /></el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="重新执行" placement="top">
+              <el-button
+                type="primary"
+                @click="handleReexecute"
+              >
+                <el-icon><Refresh /></el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="清空输出" placement="top">
+              <el-button @click="handleClear">
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="适应窗口" placement="top">
+              <el-button @click="toggleFitMode">
+                <el-icon><FullScreen /></el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="搜索" placement="top">
+              <el-button @click="toggleSearch">
+                <el-icon><Search /></el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-tooltip content="切换主题" placement="top">
+              <el-dropdown @command="changeTheme" trigger="click">
+                <el-button>
+                  <el-icon><Sunny v-if="isCurrentThemeLight" /><Moon v-else /></el-icon>
+                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="theme in themeList"
+                      :key="theme.name"
+                      :command="theme.name"
+                      :class="{ 'is-active': currentTheme === theme.name }"
+                    >
+                      {{ theme.displayName }}
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </el-tooltip>
           </el-button-group>
         </div>
       </div>
@@ -77,9 +127,38 @@
     
     <!-- Xterm.js 终端容器 -->
     <div class="terminal-container" ref="terminalContainer">
-      <div 
-        ref="terminalElement" 
+      <!-- 搜索面板 -->
+      <div v-if="showSearchPanel" class="search-panel">
+        <div class="search-content">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索内容..."
+            size="small"
+            @keyup.enter="searchNext"
+            @input="onSearchInput"
+            ref="searchInput"
+          >
+            <template #suffix>
+              <div class="search-controls">
+                <el-button text size="small" @click="searchPrev" title="上一个">
+                  <el-icon><ArrowUp /></el-icon>
+                </el-button>
+                <el-button text size="small" @click="searchNext" title="下一个">
+                  <el-icon><ArrowDown /></el-icon>
+                </el-button>
+                <el-button text size="small" @click="closeSearch" title="关闭">
+                  <el-icon><Close /></el-icon>
+                </el-button>
+              </div>
+            </template>
+          </el-input>
+        </div>
+      </div>
+
+      <div
+        ref="terminalElement"
         class="terminal-wrapper"
+        :class="{ 'terminal-focused': terminalHasFocus }"
         :style="terminalStyle"
       ></div>
       
@@ -149,6 +228,16 @@ import { SearchAddon } from '@xterm/addon-search';
 import { ElMessage } from 'element-plus';
 import { Task } from '@/types/terminal';
 import {
+  getTheme,
+  getThemeList,
+  isLightTheme,
+  createSelectionStyle,
+  loadTheme,
+  saveTheme,
+  DEFAULT_THEME,
+  type XtermTheme
+} from '@/config/xtermThemes';
+import {
   Loading,
   SuccessFilled,
   CircleCloseFilled,
@@ -161,7 +250,12 @@ import {
   ArrowDown,
   ArrowUp,
   CopyDocument,
-  WarningFilled
+  WarningFilled,
+  Search,
+  Sunny,
+  Moon,
+  Close,
+  Star
 } from '@element-plus/icons-vue';
 
 // 引入xterm.js样式
@@ -187,6 +281,7 @@ interface Emits {
   (e: 'send-input', data: { taskId: string; data: string }): void;
   (e: 'send-input-immediate', data: { taskId: string; data: string }): void;
   (e: 'resize-terminal', data: { taskId: string; rows: number; cols: number }): void;
+  (e: 'add-to-favorites', command: string): void;
 }
 
 const props = defineProps<Props>();
@@ -195,6 +290,7 @@ const emit = defineEmits<Emits>();
 // 响应式数据
 const terminalElement = ref<HTMLElement>();
 const terminalContainer = ref<HTMLElement>();
+const searchInput = ref<HTMLElement>();
 const terminal = ref<Terminal>();
 const fitAddon = ref<FitAddon>();
 const webLinksAddon = ref<WebLinksAddon>();
@@ -205,9 +301,22 @@ const isInterrupting = ref(false);
 const fitMode = ref(true);
 const inputMode = ref<'command' | 'interactive'>('interactive');
 
+// 终端焦点状态管理
+const terminalHasFocus = ref(true);
+
 // 命令展开相关
 const isCommandExpanded = ref(false);
 const commandLineRef = ref<HTMLElement>();
+
+// 搜索相关
+const showSearchPanel = ref(false);
+const searchQuery = ref('');
+
+// 主题相关
+const currentTheme = ref<string>(loadTheme());
+
+// 获取主题列表
+const themeList = computed(() => getThemeList());
 
 // 终端尺寸
 const terminalSize = ref({
@@ -220,6 +329,11 @@ const terminalStyle = computed(() => ({
   width: fitMode.value ? '100%' : 'auto',
   height: fitMode.value ? '100%' : 'auto'
 }));
+
+// 判断当前是否为浅色主题
+const isCurrentThemeLight = computed(() => {
+  return isLightTheme(currentTheme.value);
+});
 
 // 判断命令是否需要截断
 const isCommandTruncated = computed(() => {
@@ -234,31 +348,12 @@ const initializeTerminal = async () => {
   isLoading.value = true;
   
   try {
+    // 获取当前主题配置
+    const themeConfig = getTheme(currentTheme.value);
+
     // 创建终端实例
     terminal.value = new Terminal({
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#cccccc',
-        cursor: '#ffffff',
-        cursorAccent: '#000000',
-        selection: '#3a3d41',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#ffffff'
-      },
+      theme: themeConfig.colors,
       fontSize: 14,
       fontFamily: 'MesloLGS NF, Monaco, Menlo, "Ubuntu Mono", Consolas, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace',
       cursorBlink: true,
@@ -323,48 +418,106 @@ const initializeTerminal = async () => {
       }
     });
 
-    // 添加键盘快捷键支持
+    // 添加焦点事件监听 - 使用DOM事件而不是terminal实例方法
+    // 等待terminal完全初始化后再添加事件监听器
+    await nextTick();
+
+    const textareaElement = terminalElement.value?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+    if (textareaElement) {
+      textareaElement.addEventListener('focus', () => {
+        terminalHasFocus.value = true;
+        debugLog('Terminal gained focus');
+      });
+
+      textareaElement.addEventListener('blur', () => {
+        terminalHasFocus.value = false;
+        debugLog('Terminal lost focus');
+      });
+    }
+    
+    // 添加容器焦点监听
+    if (terminalElement.value) {
+      // 让容器可以获得焦点
+      terminalElement.value.setAttribute('tabindex', '0');
+      
+      terminalElement.value.addEventListener('focus', () => {
+        terminalHasFocus.value = true;
+        debugLog('Terminal element gained focus');
+      });
+      
+      terminalElement.value.addEventListener('blur', () => {
+        terminalHasFocus.value = false;
+        debugLog('Terminal element lost focus');
+      });
+      
+      // 添加点击事件来获得焦点
+      terminalElement.value.addEventListener('click', () => {
+        terminalElement.value?.focus();
+        terminal.value?.focus();
+        debugLog('Terminal clicked, focusing');
+      });
+    }
+
+    // 添加键盘快捷键支持 - 修正的Ctrl+C逻辑
     terminal.value.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      // Ctrl+C 处理 - 区分复制和中断
-      if (event.ctrlKey && event.code === 'KeyC') {
-        if (terminal.value?.hasSelection()) {
-          // 有选中文本时进行复制
-          const selection = terminal.value.getSelection();
-          if (selection) {
-            navigator.clipboard.writeText(selection).then(() => {
-              console.log('文本已复制到剪贴板');
-            }).catch((err) => {
-              console.error('复制失败:', err);
-              // 如果现代API失败，尝试传统方法
-              try {
-                const textArea = document.createElement('textarea');
-                textArea.value = selection;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                console.log('文本已复制到剪贴板 (fallback)');
-              } catch (fallbackErr) {
-                console.error('fallback复制也失败:', fallbackErr);
-              }
-            });
-            return false; // 阻止默认行为
-          }
-        } else {
-          // 无选中文本时发送中断信号
+      // 焦点在终端内时的键盘处理
+      if (terminalHasFocus.value) {
+        // Ctrl+C 处理 - 焦点在终端内时发送中断信号
+        if (event.ctrlKey && event.code === 'KeyC' && !event.shiftKey) {
           if (props.currentTask && inputMode.value === 'interactive') {
             debugLog('Sending Ctrl+C interrupt signal to task:', props.currentTask.id);
+
+            // 既发送中断信号到终端，也调用后端中断方法
             emit('send-input-immediate', {
               taskId: props.currentTask.id,
               data: '\x03'  // Ctrl+C 的ASCII码 (SIGINT)
             });
+
+            // 同时调用中断任务方法，确保任务被正确标记为中断状态
+            emit('interrupt-task', props.currentTask.id);
           }
           return false; // 阻止默认行为
+        } else if (event.ctrlKey && event.shiftKey && event.code === 'KeyC') {
+          // Ctrl+Shift+C 复制选中文本（焦点在终端内时）
+          if (terminal.value?.hasSelection()) {
+            const selection = terminal.value.getSelection();
+            if (selection) {
+              navigator.clipboard.writeText(selection).then(() => {
+                debugLog('Text copied with Ctrl+Shift+C');
+              }).catch((err) => {
+                debugLog('Copy failed:', err);
+              });
+            }
+            return false; // 阻止默认行为
+          }
+        } else if (event.ctrlKey && event.code === 'KeyF') {
+          // Ctrl+F 打开搜索
+          toggleSearch();
+          return false; // 阻止默认行为
+        } else if (event.key === 'Escape' && showSearchPanel.value) {
+          // ESC 关闭搜索面板
+          closeSearch();
+          return false; // 阻止默认行为
+        }
+      } else {
+        // 焦点不在终端内时，Ctrl+C = 复制
+        if (event.ctrlKey && event.code === 'KeyC' && !event.shiftKey) {
+          if (terminal.value?.hasSelection()) {
+            const selection = terminal.value.getSelection();
+            if (selection) {
+              navigator.clipboard.writeText(selection).then(() => {
+                debugLog('Text copied with Ctrl+C (unfocused)');
+              }).catch((err) => {
+                debugLog('Copy failed:', err);
+              });
+            }
+            return false; // 阻止默认行为
+          }
         }
       }
-      
-      // Ctrl+A 跳转到行首（正常终端行为）
-      if (event.ctrlKey && event.code === 'KeyA') {
+
+      // Ctrl+A 跳转到行首（仅在焦点在终端内时）
+      if (event.ctrlKey && event.code === 'KeyA' && terminalHasFocus.value) {
         // 发送 Ctrl+A 到终端，让终端自己处理
         if (props.currentTask && inputMode.value === 'interactive') {
           emit('send-input', {
@@ -380,6 +533,7 @@ const initializeTerminal = async () => {
     
     // 添加右键菜单功能
     terminalElement.value.addEventListener('contextmenu', (event: MouseEvent) => {
+      console.log("click")
       event.preventDefault();
       
       const hasSelection = terminal.value?.hasSelection();
@@ -421,13 +575,7 @@ const initializeTerminal = async () => {
               ElMessage.error('复制失败');
             });
           }
-          try {
-            if (document.body.contains(menu)) {
-              document.body.removeChild(menu);
-            }
-          } catch (error) {
-            debugLog('Error removing menu after copy:', error);
-          }
+          cleanupMenu();
         };
         menu.appendChild(copyItem);
       }
@@ -453,24 +601,18 @@ const initializeTerminal = async () => {
             });
           }
           ElMessage.success('已粘贴文本');
-          
+
           // 粘贴后恢复终端焦点
           setTimeout(() => {
             if (terminal.value) {
               terminal.value.focus();
             }
           }, 50);
-          
+
         } catch (error) {
           ElMessage.error('粘贴失败');
         }
-        try {
-          if (document.body.contains(menu)) {
-            document.body.removeChild(menu);
-          }
-        } catch (error) {
-          debugLog('Error removing menu after paste:', error);
-        }
+        cleanupMenu();
       };
       menu.appendChild(pasteItem);
       
@@ -487,13 +629,7 @@ const initializeTerminal = async () => {
       selectAllItem.onmouseout = () => selectAllItem.style.background = 'transparent';
       selectAllItem.onclick = () => {
         terminal.value?.selectAll();
-        try {
-          if (document.body.contains(menu)) {
-            document.body.removeChild(menu);
-          }
-        } catch (error) {
-          debugLog('Error removing menu after select all:', error);
-        }
+        cleanupMenu();
         // 恢复终端焦点
         setTimeout(() => {
           if (terminal.value) {
@@ -516,13 +652,7 @@ const initializeTerminal = async () => {
       clearItem.onmouseout = () => clearItem.style.background = 'transparent';
       clearItem.onclick = () => {
         handleClear();
-        try {
-          if (document.body.contains(menu)) {
-            document.body.removeChild(menu);
-          }
-        } catch (error) {
-          debugLog('Error removing menu after clear:', error);
-        }
+        cleanupMenu();
         // 恢复终端焦点
         setTimeout(() => {
           if (terminal.value) {
@@ -533,38 +663,41 @@ const initializeTerminal = async () => {
       menu.appendChild(clearItem);
       
       document.body.appendChild(menu);
-      
-      // 点击其他地方关闭菜单
-      const closeMenu = (e: MouseEvent) => {
-        if (!menu.contains(e.target as Node)) {
-          try {
-            if (document.body.contains(menu)) {
-              document.body.removeChild(menu);
-            }
-          } catch (error) {
-            debugLog('Error removing context menu:', error);
+
+      // 统一的菜单清理函数
+      const cleanupMenu = () => {
+        try {
+          if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
           }
-          document.removeEventListener('click', closeMenu);
+        } catch (error) {
+          debugLog('Error removing context menu:', error);
+        }
+        // 清理所有事件监听器
+        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('contextmenu', closeMenu);
+        document.removeEventListener('keydown', closeMenuOnEscape);
+      };
+
+      // 修正的菜单关闭逻辑
+      const closeMenu = (e: MouseEvent | Event) => {
+        // 检查点击是否在菜单外
+        if (!menu.contains(e.target as Node)) {
+          cleanupMenu();
         }
       };
-      
+
       // 添加键盘ESC关闭菜单
       const closeMenuOnEscape = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
-          try {
-            if (document.body.contains(menu)) {
-              document.body.removeChild(menu);
-            }
-          } catch (error) {
-            debugLog('Error removing context menu on escape:', error);
-          }
-          document.removeEventListener('click', closeMenu);
-          document.removeEventListener('keydown', closeMenuOnEscape);
+          cleanupMenu();
         }
       };
-      
+
+      // 立即添加事件监听器，监听左键和右键点击
       setTimeout(() => {
         document.addEventListener('click', closeMenu);
+        document.addEventListener('contextmenu', closeMenu); // 右键点击也关闭菜单
         document.addEventListener('keydown', closeMenuOnEscape);
       }, 0);
     });
@@ -575,6 +708,19 @@ const initializeTerminal = async () => {
     }
     
     debugLog('Xterm terminal initialized successfully');
+
+    // 初始化选中样式
+    updateSelectionStyle();
+
+    // 等待样式应用后再次刷新布局，确保xterm-viewport高度正确
+    await nextTick();
+    setTimeout(() => {
+      fitTerminal();
+      // 强制刷新viewport高度
+      if (fitAddon.value) {
+        fitAddon.value.fit();
+      }
+    }, 100);
     
   } catch (error) {
     console.error('Failed to initialize terminal:', error);
@@ -648,7 +794,7 @@ const toggleCommandExpanded = () => {
 // 复制命令到剪贴板
 const copyCommand = async () => {
   if (!props.currentTask?.command) return;
-  
+
   try {
     await navigator.clipboard.writeText(props.currentTask.command);
     ElMessage.success('命令已复制到剪贴板');
@@ -667,6 +813,14 @@ const copyCommand = async () => {
       ElMessage.error('复制失败');
     }
   }
+};
+
+// 收藏命令
+const favoriteCommand = () => {
+  if (!props.currentTask?.command) return;
+
+  emit('add-to-favorites', props.currentTask.command);
+  ElMessage.success('命令已添加到收藏');
 };
 
 // 格式化时间
@@ -722,6 +876,79 @@ const getStatusText = (status: Task['status']): string => {
     pending: '等待中'
   };
   return textMap[status];
+};
+
+// 搜索相关方法
+const toggleSearch = () => {
+  showSearchPanel.value = !showSearchPanel.value;
+  if (showSearchPanel.value) {
+    nextTick(() => {
+      searchInput.value?.focus();
+    });
+  } else {
+    searchQuery.value = '';
+  }
+};
+
+const closeSearch = () => {
+  showSearchPanel.value = false;
+  searchQuery.value = '';
+  terminal.value?.focus();
+};
+
+const onSearchInput = () => {
+  if (searchQuery.value && searchAddon.value) {
+    searchAddon.value.findNext(searchQuery.value);
+  }
+};
+
+const searchNext = () => {
+  if (searchQuery.value && searchAddon.value) {
+    searchAddon.value.findNext(searchQuery.value);
+  }
+};
+
+const searchPrev = () => {
+  if (searchQuery.value && searchAddon.value) {
+    searchAddon.value.findPrevious(searchQuery.value);
+  }
+};
+
+// 主题切换方法
+const changeTheme = (themeName: string) => {
+  currentTheme.value = themeName;
+  saveTheme(themeName);
+  updateTerminalTheme();
+};
+
+const updateTerminalTheme = () => {
+  if (terminal.value) {
+    const themeConfig = getTheme(currentTheme.value);
+    terminal.value.options.theme = themeConfig.colors;
+
+    // 更新终端容器背景色
+    if (terminalElement.value) {
+      terminalElement.value.style.backgroundColor = themeConfig.colors.background;
+    }
+
+    // 更新选中文本的样式
+    updateSelectionStyle();
+  }
+};
+
+// 更新选中文本样式
+const updateSelectionStyle = () => {
+  // 移除之前的样式
+  const existingStyle = document.querySelector('#xterm-selection-style');
+  if (existingStyle) {
+    existingStyle.remove();
+  }
+
+  // 使用新的主题配置文件中的方法生成样式
+  const style = document.createElement('style');
+  style.id = 'xterm-selection-style';
+  style.textContent = createSelectionStyle(currentTheme.value);
+  document.head.appendChild(style);
 };
 
 // 处理任务输出
@@ -781,6 +1008,13 @@ onMounted(async () => {
   
   // 监听窗口尺寸变化
   window.addEventListener('resize', handleResize);
+  
+  // 初始化后设置焦点检测
+  nextTick(() => {
+    if (terminalElement.value) {
+      terminalElement.value.click(); // 自动获得焦点
+    }
+  });
 });
 
 onUnmounted(() => {
@@ -821,6 +1055,12 @@ onUnmounted(() => {
     } catch (error) {
       console.warn('Error disposing terminal:', error);
     }
+  }
+
+  // 清理动态添加的选中样式
+  const selectionStyle = document.querySelector('#xterm-selection-style');
+  if (selectionStyle) {
+    selectionStyle.remove();
   }
   
   window.removeEventListener('resize', handleResize);
@@ -951,9 +1191,42 @@ defineExpose({
   overflow: hidden;
 }
 
+/* 搜索面板样式 */
+.search-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  box-shadow: var(--el-box-shadow);
+  margin: 8px;
+  min-width: 300px;
+  backdrop-filter: blur(10px);
+}
+
+.search-content {
+  padding: 8px;
+}
+
+.search-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .terminal-wrapper {
   width: 100%;
   height: 100%;
+  transition: border 0.2s ease;
+  border: 2px solid transparent;
+  border-radius: 4px;
+}
+
+.terminal-wrapper.terminal-focused {
+  border: 2px solid var(--el-color-primary);
+  box-shadow: 0 0 10px rgba(36, 114, 200, 0.3);
 }
 
 .terminal-overlay {
@@ -1074,12 +1347,6 @@ defineExpose({
   opacity: 0 !important;
 }
 
-/* 选择高亮样式 */
-:deep(.xterm-selection div) {
-  background-color: var(--el-color-primary) !important;
-  opacity: 0.3 !important;
-}
-
 /* 响应式调整 */
 @media (max-width: 768px) {
   .xterm-task-output {
@@ -1109,5 +1376,10 @@ defineExpose({
   .footer-right {
     justify-content: space-between;
   }
+}
+
+:deep(.xterm-decoration-top) {
+  background-color: rgba(100, 100, 255, 0.3) !important;
+  letter-spacing: -0.00568182px;
 }
 </style>

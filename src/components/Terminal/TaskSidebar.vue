@@ -367,19 +367,14 @@ const getStatusClass = (status: Task['status']): string => {
   transition: all 0.2s;
 }
 
-.task-interrupt-btn:hover,
-.task-delete-btn:hover {
-  background-color: var(--el-fill-color-light);
-}
-
-.task-delete-btn:hover {
-  background-color: var(--el-color-danger-light-8);
-  color: var(--el-color-danger);
-}
-
 .task-interrupt-btn:hover {
   background-color: var(--el-color-warning-light-8);
   color: var(--el-color-warning);
+}
+
+.task-delete-btn:hover {
+  background-color: var(--el-color-danger-light-8) !important;
+  color: var(--el-color-danger) !important;
 }
 
 .empty-state {

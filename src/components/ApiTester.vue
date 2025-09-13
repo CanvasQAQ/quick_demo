@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, toRefs } from 'vue'  // 添加 watch 和 toRefs
 import { ElMessage } from 'element-plus'
 
 interface ApiTestResult {
@@ -75,7 +75,15 @@ const props = withDefaults(defineProps<Props>(), {
   baseUrl: ''
 })
 
+// 在 props 定义后添加
+const { baseUrl } = toRefs(props)
 
+// 监听 baseUrl 变化
+
+watch(baseUrl, (newBaseUrl) => {
+  console.log('baseUrl updated:', newBaseUrl)
+  // 这里可以添加任何需要 baseUrl 更新后执行的逻辑
+}, { immediate: true })
 
 
 const emit = defineEmits<{
@@ -92,7 +100,9 @@ const getFullUrl = (endpoint: string): string => {
   if (endpoint.startsWith('http')) {
     return endpoint
   }
-  return props.baseUrl ? `${props.baseUrl}${endpoint}` : endpoint
+  // 确保每次都从 props 获取最新值
+  const currentBaseUrl = props.baseUrl || ''
+  return currentBaseUrl ? `${currentBaseUrl}${endpoint}` : endpoint
 }
 
 const testCustomApi = async () => {

@@ -109,8 +109,8 @@ class TerminalSession:
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
                 'taskId': task_id,
-                'exitCode': return_code,
-                'message': 'Command execution completed with code ' + str(return_code)
+                'exitCode': return_code
+                # 移除message，不在终端中显示退出码
             })
             
             self.socketio.emit('terminal_status', {
@@ -190,8 +190,8 @@ class TerminalSession:
             self.socketio.emit('terminal_complete', {
                 'sessionId': self.session_id,
                 'taskId': task_id,
-                'exitCode': -2,  # 中断退出码
-                'message': 'Command interrupted by user'
+                'exitCode': -2  # 中断退出码
+                # 移除message，不在终端中显示中断信息
             })
             
             self.socketio.emit('terminal_status', {
